@@ -1,0 +1,6 @@
+{
+  "name": "RK VIDEO - Mobile Video Streaming Platform",
+  "description": "RK VIDEO is a premium mobile-first video streaming and viral entertainment platform with trending videos, exclusive posts, and real-time database integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

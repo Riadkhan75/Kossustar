@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="bn" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>RK VIDEO - Mobile Video Streaming Platform</title>
+    <meta name="description" content="RK VIDEO is a premium mobile-first video streaming platform with trending entertainment and viral videos." />
+    
+    <!-- OpenGraph / Social Sharing -->
+    <meta property="og:title" content="RK VIDEO - Mobile Video Streaming Platform" />
+    <meta property="og:description" content="RK VIDEO is a premium mobile-first video streaming platform with trending entertainment and viral videos." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    
+    <!-- Google Fonts: Poppins & Hind Siliguri -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- App Stylesheet -->
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- Sticky Top Navbar -->
+    <header class="navbar">
+      <div class="container navbar-container">
+        <!-- Brand Logo (Updates dynamically with website name) -->
+        <a href="/" class="navbar-brand" id="navBrand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span id="siteBrandName">RK VIDEO</span>
+          </div>
+        </a>
+
+        <!-- Right Navbar Actions -->
+        <div class="navbar-actions">
+          <div class="live-badge" id="navLiveBadge">
+            <span class="pulse-dot"></span>
+            <span id="liveBadgeText">LIVE 4K</span>
+          </div>
+
+          <!-- Search Toggle Button -->
+          <button class="nav-btn" id="searchToggleBtn" title="ভিডিও খুঁজুন" aria-label="Search Videos">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+
+          <!-- Theme Toggle Button -->
+          <button class="nav-btn" id="themeToggleBtn" title="থিম পরিবর্তন" aria-label="Toggle Dark/Light Mode">
+            <svg id="themeIconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg id="themeIconMoon" style="display: none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+
+          <!-- Menu Drawer Toggle Button -->
+          <button class="nav-btn" id="menuToggleBtn" title="মেনু খুলুন" aria-label="Open Navigation Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Search Bar -->
+      <div class="search-container" id="searchContainer">
+        <div class="container">
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="searchInput" class="search-input" placeholder="ভিডিও বা ক্যাটাগরি অনুসন্ধান করুন..." autocomplete="off" />
+            <button id="searchClearBtn" class="search-clear-btn" aria-label="Clear Search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Category Filter Chips (Dynamically added by admin) -->
+      <section class="categories-section" id="categoriesSection">
+        <div class="category-scroll" id="categoryChipsContainer">
+          <button class="category-chip active" data-category="All">সব / All</button>
+          <!-- Admin-created categories render here dynamically -->
+        </div>
+      </section>
+
+      <!-- Adsterra Top Ad Banner Slot (Rendered if set in Admin) -->
+      <div id="adsterraTopSlot" class="adsterra-slot"></div>
+
+      <!-- Adsterra Smartlink Floating / Header Bar (Rendered if set in Admin) -->
+      <div id="homeSmartlinkBanner" class="smartlink-home-banner" style="display: none;">
+        <a id="homeSmartlinkLink" href="#" target="_blank" rel="noopener noreferrer" class="smartlink-home-pill">
+          <span class="smartlink-pulse-icon">🔥</span>
+          <span id="homeSmartlinkText">⚡ স্পন্সরড হাই স্পিড লিংক ও ডাউনলোড</span>
+          <span class="smartlink-pill-tag">ভিজিট করুন ↗</span>
+        </a>
+      </div>
+
+      <!-- Pure Videos Section -->
+      <section class="videos-section">
+        <div class="section-header">
+          <h2 class="section-title">
+            <span>🔥 ভিডিও কালেকশন</span>
+          </h2>
+          <span class="section-counter" id="videoCounter">লোড হচ্ছে...</span>
+        </div>
+
+        <!-- Video Grid (Mobile 2-col, Tablet 3-col, Desktop 4-col) -->
+        <div class="video-grid" id="videoGrid">
+          <!-- Loading Skeletons will appear here initially -->
+          <div class="video-card skeleton" style="height: 180px;"></div>
+          <div class="video-card skeleton" style="height: 180px;"></div>
+          <div class="video-card skeleton" style="height: 180px;"></div>
+          <div class="video-card skeleton" style="height: 180px;"></div>
+        </div>
+
+        <!-- Clean Empty State (Without exposing admin links) -->
+        <div id="videoEmptyState" class="empty-state" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+            <line x1="7" y1="2" x2="7" y2="22"></line>
+            <line x1="17" y1="2" x2="17" y2="22"></line>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <line x1="2" y1="7" x2="7" y2="7"></line>
+            <line x1="2" y1="17" x2="7" y2="17"></line>
+            <line x1="17" y1="17" x2="22" y2="17"></line>
+            <line x1="17" y1="7" x2="22" y2="7"></line>
+          </svg>
+          <h3>কোনো ভিডিও পাওয়া যায়নি!</h3>
+          <p>বর্তমানে কোনো ভিডিও আপলোড করা নেই। শীঘ্রই নতুন ভিডিও আপলোড করা হবে।</p>
+        </div>
+      </section>
+
+      <!-- Adsterra Bottom Ad Banner Slot (Rendered if set in Admin) -->
+      <div id="adsterraBottomSlot" class="adsterra-slot"></div>
+    </main>
+
+    <!-- Video Player Modal -->
+    <div class="player-modal-backdrop" id="playerModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="playerTitle">
+      <div class="player-modal">
+        <!-- Header -->
+        <div class="player-header">
+          <div class="player-header-title" id="playerHeaderTitle">ভিডিও প্লেয়ার</div>
+          <button class="player-close-btn" id="playerCloseBtn" aria-label="Close Player">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Media Wrap -->
+        <div class="player-media-wrap">
+          <video 
+            id="mainVideoPlayer" 
+            class="player-video" 
+            controls 
+            playsinline 
+            preload="metadata"
+            poster=""
+          >
+            আপনার ব্রাউজারটি ভিডিও সমর্থন করছে না।
+          </video>
+        </div>
+
+        <!-- Details & Stats -->
+        <div class="player-details">
+          <h1 class="player-full-title" id="playerTitle">ভিডিওর শিরোনাম</h1>
+          
+          <div class="player-actions-bar">
+            <div class="player-stats-left">
+              <span id="playerViewsCount">👁 0 ভিউজ</span>
+              <span>•</span>
+              <span id="playerLikesCount">👍 0 লাইক</span>
+              <span>•</span>
+              <span id="playerCategoryTag">ক্যাটাগরি</span>
+            </div>
+
+            <div class="player-actions-right">
+              <!-- Like Button -->
+              <button class="player-action-btn" id="playerLikeBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                </svg>
+                <span id="playerLikeBtnText">লাইক</span>
+              </button>
+
+              <!-- Share Button -->
+              <button class="player-action-btn" id="playerShareBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="18" cy="5" r="3"></circle>
+                  <circle cx="6" cy="12" r="3"></circle>
+                  <circle cx="18" cy="19" r="3"></circle>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+                <span>শেয়ার</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Adsterra Smartlink In-Player Download & Direct Watch Button -->
+          <div id="playerSmartlinkContainer" class="player-smartlink-wrap" style="display: none;">
+            <a id="playerSmartlinkBtn" href="#" target="_blank" rel="noopener noreferrer" class="smartlink-btn">
+              <div class="smartlink-left">
+                <span class="smartlink-badge">FAST 4K</span>
+                <div class="smartlink-texts">
+                  <span class="smartlink-title" id="playerSmartlinkText">⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক</span>
+                  <span class="smartlink-sub">সরাসরি সার্ভার স্পিড • কোনো বাফারিং নেই</span>
+                </div>
+              </div>
+              <span class="smartlink-action">ডাউনলোড ▶</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="bottom-nav">
+      <a href="#" class="bottom-nav-item active" id="bnavHome">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+        <span>হোম</span>
+      </a>
+      <a href="#categoriesSection" class="bottom-nav-item" id="bnavCategories">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span>ক্যাটাগরি</span>
+      </a>
+      <button class="bottom-nav-item" id="bnavSearch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>সার্চ</span>
+      </button>
+      <button class="bottom-nav-item" id="bnavMenuBtn" title="মেনু খুলুন">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+        <span>মেনু</span>
+      </button>
+    </nav>
+
+    <!-- Side Menu Drawer & Backdrop (Admin Panel accessible here) -->
+    <div class="menu-backdrop" id="menuBackdrop" aria-hidden="true"></div>
+    <aside class="menu-drawer" id="siteMenuDrawer" aria-label="Navigation Menu">
+      <div class="menu-drawer-header">
+        <div class="menu-drawer-brand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </div>
+          <span id="menuSiteBrand">RK VIDEO</span>
+        </div>
+        <button class="menu-drawer-close" id="menuCloseBtn" aria-label="Close Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="menu-drawer-body">
+        <a href="#" class="menu-item" id="menuHomeLink">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span>হোমপেজ</span>
+        </a>
+
+        <a href="#categoriesSection" class="menu-item" id="menuCategoriesLink">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>সব ক্যাটাগরি</span>
+        </a>
+
+        <button class="menu-item" id="menuSearchBtn" style="width: 100%; text-align: left;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span>ভিডিও সার্চ করুন</span>
+        </button>
+
+        <button class="menu-item" id="menuThemeToggleBtn" style="width: 100%; text-align: left;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+          <span>থিম মোড (ডার্ক / লাইট)</span>
+        </button>
+
+        <!-- Admin Panel Menu Link (Requested: Admin Panel path na menu te Add kore dew) -->
+        <a href="/admin.html" class="menu-item menu-item-admin" id="menuAdminLink">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span>অ্যাডমিন প্যানেল</span>
+          <span class="menu-badge-admin">লগইন</span>
+        </a>
+      </div>
+
+      <div class="menu-drawer-footer">
+        <p>&copy; 2026 <span id="drawerFooterBrand">RK VIDEO</span></p>
+        <p style="margin-top: 4px; font-size: 0.72rem; color: var(--color-text-muted);">ভার্সন ২.১ • প্রিমিয়াম ভিডিও স্ট্রিমিং</p>
+      </div>
+    </aside>
+
+    <!-- Back to Top Button -->
+    <button class="back-to-top" id="backToTopBtn" title="উপরে যান" aria-label="Back to top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <p>&copy; 2026 <strong id="footerBrand">RK VIDEO</strong>. সর্বস্বত্ব সংরক্ষিত।</p>
+      </div>
+    </footer>
+
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+
+    <!-- Firebase Config & Logic -->
+    <script src="/firebase-config.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
