@@ -882,17 +882,45 @@
                 <small style="color: var(--color-text-muted); font-size: 0.75rem;">এই বিজ্ঞাপনটি ভিডিও গ্রিডের উপরে প্রদর্শিত হবে।</small>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="adsterraBannerBottom">
-                  ২. বটম ব্যানার অ্যাড কোড (Bottom Banner Script - 728x90 / 300x250 / Native)
-                </label>
+              <div class="form-group" style="background: rgba(239, 68, 68, 0.04); padding: 14px; border-radius: var(--radius-md); border: 1.5px solid rgba(239, 68, 68, 0.25);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                  <label class="form-label" for="adsterraBannerBottom" style="color: #dc2626; font-weight: 700; margin-bottom: 0;">
+                    ২. বটম ব্যানার অ্যাড কোড (নিচের বড় অ্যাডাল্ট / সাধারণ বিজ্ঞাপন - 300x250 / Native / 728x90)
+                  </label>
+                  <div style="display: flex; gap: 4px;">
+                    <span style="font-size: 0.72rem; background: #dc2626; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 700;">🔥 হাই সিপিসি</span>
+                    <span style="font-size: 0.72rem; background: #2563eb; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 600;">🔞 Adult Ready</span>
+                  </div>
+                </div>
+
+                <p style="font-size: 0.78rem; color: var(--color-text-muted); margin-bottom: 8px; line-height: 1.4;">
+                  💡 <strong>নিচে বড় বিজ্ঞাপন বসানোর নিয়ম:</strong> Adsterra ড্যাশবোর্ডে গিয়ে আপনার সাইটে <strong>300x250 (Medium Rectangle)</strong> অথবা <strong>Native Banners (4x1 / 4x2)</strong> অথবা <strong>728x90</strong> অ্যাড ইউনিট যুক্ত করুন। এরপর প্রাপ্ত স্ক্রিপ্ট কোডটি হুবহু নিচের বক্সে পেস্ট করুন। এটি ওয়েবসাইটের ভিডিও গ্রিডের নিচে বড় সাইজে স্বয়ংক্রিয়ভাবে ফিট হয়ে প্রদর্শিত হবে।
+                </p>
+
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                  <button type="button" id="bottomTemplate300Btn" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 9px;">
+                    + 300x250 বড় ব্যানার টেমপ্লেট
+                  </button>
+                  <button type="button" id="bottomTemplateNativeBtn" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 9px;">
+                    + 4x1 Native অ্যাড টেমপ্লেট
+                  </button>
+                  <button type="button" id="bottomTemplate728Btn" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 9px;">
+                    + 728x90 ব্যানার টেমপ্লেট
+                  </button>
+                  <button type="button" id="bottomTemplateCustomBtn" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 9px;">
+                    + কাস্টম ছবি ও লিঙ্ক
+                  </button>
+                </div>
+
                 <textarea 
                   id="adsterraBannerBottom" 
                   class="form-textarea" 
-                  rows="4" 
+                  rows="5" 
                   placeholder="<script type='text/javascript'>...</script> অথবা ব্যানার কোড পেস্ট করুন"
                 ></textarea>
-                <small style="color: var(--color-text-muted); font-size: 0.75rem;">এই বিজ্ঞাপনটি ভিডিও গ্রিডের নিচে প্রদর্শিত হবে।</small>
+                <small style="color: var(--color-text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">
+                  এই বিজ্ঞাপনটি ওয়েবসাইটের নিচে ভিডিও তালিকার ঠিক পরে বড় পরিসরে প্রদর্শিত হবে। অ্যান্টি-অ্যাডব্লকার শিল্ড দ্বারা এটি সব ব্রাউজারে সুরক্ষিত থাকবে।
+                </small>
               </div>
 
               <div class="form-group">
@@ -1021,6 +1049,51 @@
                 </div>
               </div>
 
+              <!-- 7. Anti-Adblock & Adult Ads Protection Engine -->
+              <div class="form-group" style="background: rgba(220, 38, 38, 0.05); padding: 16px; border-radius: var(--radius-md); border: 1.5px solid rgba(220, 38, 38, 0.25); margin-top: 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.25rem;">🛡️🔞</span>
+                    <label class="form-label" style="color: #dc2626; font-weight: 700; margin-bottom: 0;">
+                      ৭. অ্যান্টি-অ্যাডব্লকার ও অ্যাডাল্ট অ্যাডস প্রোটেকশন (Anti-AdBlock & Adult Ads Engine)
+                    </label>
+                  </div>
+                  <span style="font-size: 0.72rem; background: #dc2626; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 700;">সর্বদা আনব্লক</span>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 12px; line-height: 1.45;">
+                  এই সেটিংস সক্রিয় থাকলে কোনো ভিজিটর বা ব্রাউজারের অ্যাডব্লকার আপনার অ্যাডস ব্লক করতে পারবে না এবং অ্যাডাল্ট স্মার্টলিংক/পপআন্ডার স্বয়ংক্রিয়ভাবে সবসময় ওপেন থাকবে।
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer;">
+                    <input type="checkbox" id="antiAdblockEnabled" checked style="width: 16px; height: 16px;" />
+                    <span style="font-weight: 600;">🛡️ অ্যান্টি-অ্যাডব্লকার শিল্ড ও স্মার্ট বাইপাস (Anti-Adblock Shield)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer;">
+                    <input type="checkbox" id="adultAdsAlwaysActive" checked style="width: 16px; height: 16px;" />
+                    <span style="font-weight: 600;">🔞 অ্যাডাল্ট অ্যাডস ও হাই-সিপিএম স্মার্টলিংক সবসময় ওপেন রাখুন (Adult Ads Always Open)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer;">
+                    <input type="checkbox" id="adultAdsTriggerOnPlay" checked style="width: 16px; height: 16px;" />
+                    <span>ভিডিও ওপেন/প্লে করার সময় ডিরেক্ট লিঙ্ক আনব্লক আকারে চালু করুন (Native Gesture - No Popup Block)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer;">
+                    <input type="checkbox" id="antiAdblockNotice" checked style="width: 16px; height: 16px;" />
+                    <span>ব্রাউজারে অ্যাডব্লকার অন থাকলে নোটিশ পপআপ দেখান (AdBlocker Detection Modal)</span>
+                  </label>
+                </div>
+
+                <div style="margin-top: 12px;">
+                  <label class="form-label" for="adultDirectUrl" style="font-size: 0.82rem;">🔞 আলাদা অ্যাডাল্ট ডিরেক্ট লিংক (ঐচ্ছিক - খালি রাখলে স্মার্টলিংক ব্যবহার হবে)</label>
+                  <input 
+                    type="url" 
+                    id="adultDirectUrl" 
+                    class="form-input" 
+                    placeholder="https://... আপনার অ্যাডাল্ট অফার বা অ্যাডস্টেরা ডিরেক্ট লিংক" 
+                  />
+                </div>
+              </div>
+
               <button type="submit" class="btn-primary" style="margin-top: 10px;">
                 <span>অ্যাডস্টেরা সেটিংস সংরক্ষণ করুন</span>
               </button>
@@ -1102,6 +1175,19 @@
   }
 }</div>
 
+            <h3 class="admin-box-title" style="margin-top: 20px; margin-bottom: 8px;">☁️ Firebase Cloud Storage Security Rules</h3>
+            <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 12px;">
+              যদি আপনি Firebase Cloud Storage ব্যবহার করে সরাসরি গুগল ক্লাউডে ভিডিও ফাইল হোস্ট করতে চান, তবে Firebase Console -> Storage -> <strong>Rules</strong> ট্যাবে নিচের কোডটি পেস্ট করে <strong>Publish</strong> করুন:
+            </p>
+            <div class="code-box">rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}</div>
+
             <!-- Vercel & Online Firebase Quick Connect -->
             <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border);">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -1175,6 +1261,15 @@
 
           <!-- Option B: Direct Video File Upload -->
           <div id="fileSourceSection" style="display: none;">
+            <!-- Permanent Cloud Storage System Guarantee Badge -->
+            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 10px;">
+              <span style="font-size: 1.3rem; line-height: 1;">☁️</span>
+              <div style="font-size: 0.82rem; color: var(--color-text); line-height: 1.45;">
+                <strong style="color: #059669; font-weight: 700;">পার্মানেন্ট ক্লাউড স্টোরেজ সিস্টেম:</strong>
+                ভিডিও ফাইল আপলোড সম্পন্ন হলে আপনি <strong>নিশ্চিন্তে মোবাইল গ্যালারি বা ফোন মেমোরি থেকে মূল ভিডিও ডিলিট করে দিতে পারেন</strong> — ওয়েবসাইটে ভিডিওটি আজীবন স্থায়ীভাবে চলবে এবং সব ডিভাইস থেকে প্লে হবে!
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">সরাসরি ভিডিও ফাইল সিলেক্ট / আপলোড *</label>
               <div id="videoDropZone" class="video-drop-zone">
@@ -1198,6 +1293,17 @@
                   </div>
                   <button type="button" id="removeFileBtn" class="btn-outline" style="padding: 4px 8px; font-size: 0.74rem;">পরিবর্তন</button>
                 </div>
+              </div>
+            </div>
+
+            <!-- Single File Upload Progress Bar -->
+            <div id="singleFileProgressContainer" class="bulk-progress-container" style="display: none; margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600;">
+                <span id="singleFileProgressStatus">ভিডিও পার্মানেন্ট স্টোরেজে আপলোড হচ্ছে...</span>
+                <span id="singleFileProgressPercent">0%</span>
+              </div>
+              <div class="bulk-progress-bar-bg">
+                <div id="singleFileProgressFill" class="bulk-progress-bar-fill"></div>
               </div>
             </div>
           </div>
@@ -1452,6 +1558,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
 
     <!-- App Configuration and Admin Engine -->

@@ -74,6 +74,10 @@
   const removeFileBtn = document.getElementById('removeFileBtn');
   const previewContainer = document.getElementById('previewContainer');
   const modalVideoPreview = document.getElementById('modalVideoPreview');
+  const singleFileProgressContainer = document.getElementById('singleFileProgressContainer');
+  const singleFileProgressStatus = document.getElementById('singleFileProgressStatus');
+  const singleFileProgressPercent = document.getElementById('singleFileProgressPercent');
+  const singleFileProgressFill = document.getElementById('singleFileProgressFill');
 
   let activeVideoSourceMode = 'url'; // 'url' | 'file'
   let currentSelectedFile = null;
@@ -689,6 +693,16 @@
     adminVideosList.innerHTML = adminVideos.map(v => {
       const isChecked = v.active !== false ? 'checked' : '';
       const thumb = v.thumbUrl || '';
+      const vUrl = v.videoUrl || '';
+      let storageBadge = '';
+      if (vUrl.includes('firebasestorage') || (vUrl.startsWith('http') && !v.isUploadedFile)) {
+        storageBadge = '<span style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;" title="মোবাইল থেকে ডিলিট করলেও ক্লাউডে আজীবন সংরক্ষিত">☁️ ক্লাউড (স্থায়ী)</span>';
+      } else if (vUrl.startsWith('/uploads/')) {
+        storageBadge = '<span style="background: rgba(37, 99, 235, 0.12); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;" title="মোবাইল থেকে ডিলিট করলেও সার্ভারে স্থায়ীভাবে সংরক্ষিত">💾 সার্ভার ফাইল (স্থায়ী)</span>';
+      } else if (vUrl.startsWith('indexeddb://')) {
+        storageBadge = '<span style="background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 700;" title="ডিভাইস ব্রাউজারে সংরক্ষিত">📱 লোকাল মেমোরি</span>';
+      }
+
       return `
         <div class="item-row" data-id="${v.videoId}">
           <div class="item-row-left">
@@ -703,7 +717,7 @@
                 <span>⏱ ${escapeHtml(v.duration || '00:00')}</span>
                 <span>👁 ${v.views || 0}</span>
                 <span>👍 ${v.likes || 0}</span>
-                ${v.isUploadedFile ? '<span style="color:var(--color-primary);font-weight:600;">[সরাসরি ফাইল]</span>' : ''}
+                ${storageBadge}
               </div>
             </div>
           </div>
@@ -822,6 +836,26 @@
         }
       } catch (idbErr) {
         console.warn("IndexedDB delete notice:", idbErr);
+      }
+    }
+
+    // 2.b. Delete from server upload storage or Firebase Cloud Storage if applicable
+    if (targetVideo && targetVideo.videoUrl) {
+      if (targetVideo.videoUrl.startsWith('/uploads/')) {
+        try {
+          fetch('/api/delete-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: targetVideo.videoUrl })
+          }).catch(() => {});
+        } catch (delErr) {}
+      } else if (targetVideo.videoUrl.includes('firebasestorage') && window.RK_FIREBASE && window.RK_FIREBASE.getStorage) {
+        try {
+          const st = window.RK_FIREBASE.getStorage();
+          if (st) {
+            st.refFromURL(targetVideo.videoUrl).delete().catch(() => {});
+          }
+        } catch (stDelErr) {}
       }
     }
 
@@ -1111,6 +1145,11 @@
 
   function closeVideoModal() {
     if (videoModalBackdrop) videoModalBackdrop.classList.remove('open');
+    if (singleFileProgressContainer) singleFileProgressContainer.style.display = 'none';
+    if (saveVideoBtn) {
+      saveVideoBtn.disabled = false;
+      saveVideoBtn.innerHTML = '<span>সংরক্ষণ করুন</span>';
+    }
     hidePreviewVideo();
     clearSelectedVideoFile();
   }
@@ -1145,11 +1184,41 @@
           isUploadedFile = true;
           fileName = currentSelectedFile.name;
           fileSize = currentSelectedFile.size;
-          finalVideoUrl = 'indexeddb://' + vid;
 
-          // Save to IndexedDB
-          if (window.RK_INDEXED_DB) {
-            await window.RK_INDEXED_DB.saveVideoBlob(vid, currentSelectedFile);
+          // Activate Live Upload Progress Bar
+          if (singleFileProgressContainer) {
+            singleFileProgressContainer.style.display = 'block';
+            if (singleFileProgressPercent) singleFileProgressPercent.textContent = '0%';
+            if (singleFileProgressFill) singleFileProgressFill.style.width = '0%';
+            if (singleFileProgressStatus) singleFileProgressStatus.textContent = 'ভিডিও স্থায়ী ক্লাউড স্টোরেজে আপলোড হচ্ছে...';
+          }
+          if (saveVideoBtn) {
+            saveVideoBtn.disabled = true;
+            saveVideoBtn.innerHTML = '<span>⏳ ক্লাউডে আপলোড হচ্ছে...</span>';
+          }
+
+          try {
+            const uploadResult = await window.RK_FIREBASE.uploadVideoToCloud(
+              currentSelectedFile,
+              vid,
+              (pct, msg) => {
+                if (singleFileProgressPercent) singleFileProgressPercent.textContent = `${pct}%`;
+                if (singleFileProgressFill) singleFileProgressFill.style.width = `${pct}%`;
+                if (singleFileProgressStatus) singleFileProgressStatus.textContent = `${msg} (${pct}%)`;
+              }
+            );
+
+            if (uploadResult && uploadResult.url) {
+              finalVideoUrl = uploadResult.url;
+            } else {
+              finalVideoUrl = 'indexeddb://' + vid;
+            }
+          } catch (uploadErr) {
+            console.warn("Upload fallback error:", uploadErr);
+            finalVideoUrl = 'indexeddb://' + vid;
+            if (window.RK_INDEXED_DB) {
+              await window.RK_INDEXED_DB.saveVideoBlob(vid, currentSelectedFile);
+            }
           }
         } else {
           // Editing existing file-based video
@@ -1508,12 +1577,30 @@
       if (bulkFilesProgressPercent) bulkFilesProgressPercent.textContent = `${pct}%`;
       if (bulkFilesProgressFill) bulkFilesProgressFill.style.width = `${pct}%`;
 
-      // 1. Save blob to IndexedDB
-      if (window.RK_INDEXED_DB) {
-        try {
-          await window.RK_INDEXED_DB.saveVideoBlob(vid, item.file);
-        } catch (e) {
-          console.warn("Bulk IndexedDB save error:", e);
+      // 1. Upload to Permanent Cloud/Server Storage
+      let finalBulkUrl = 'indexeddb://' + vid;
+      try {
+        const uploadRes = await window.RK_FIREBASE.uploadVideoToCloud(
+          item.file,
+          vid,
+          (filePct, statusMsg) => {
+            const overallPct = Math.round(((i + (filePct / 100)) / total) * 100);
+            if (bulkFilesProgressPercent) bulkFilesProgressPercent.textContent = `${overallPct}%`;
+            if (bulkFilesProgressFill) bulkFilesProgressFill.style.width = `${overallPct}%`;
+            if (bulkFilesProgressStatus) {
+              bulkFilesProgressStatus.textContent = `(${i + 1}/${total}) ${item.title} - ${statusMsg}`;
+            }
+          }
+        );
+        if (uploadRes && uploadRes.url) {
+          finalBulkUrl = uploadRes.url;
+        }
+      } catch (bulkUploadErr) {
+        console.warn("Bulk upload fallback error:", bulkUploadErr);
+        if (window.RK_INDEXED_DB) {
+          try {
+            await window.RK_INDEXED_DB.saveVideoBlob(vid, item.file);
+          } catch (e) {}
         }
       }
 
@@ -1521,7 +1608,7 @@
       const videoData = {
         videoId: vid,
         title: (item.title || '').trim() || item.file.name,
-        videoUrl: 'indexeddb://' + vid,
+        videoUrl: finalBulkUrl,
         thumbUrl: item.thumbUrl || '',
         isUploadedFile: true,
         fileName: item.file.name,
@@ -1835,6 +1922,79 @@
     if (adsterraMessageSender) adsterraMessageSender.value = s.adsterraMessageSender || '💬 (1) নতুন নোটিফিকেশন';
     if (adsterraMessageText) adsterraMessageText.value = s.adsterraMessageText || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...';
     if (adsterraMessageBtnText) adsterraMessageBtnText.value = s.adsterraMessageBtnText || 'ওপেন করুন ⚡';
+
+    const antiAdblockEnabled = document.getElementById('antiAdblockEnabled');
+    const adultAdsAlwaysActive = document.getElementById('adultAdsAlwaysActive');
+    const adultAdsTriggerOnPlay = document.getElementById('adultAdsTriggerOnPlay');
+    const antiAdblockNotice = document.getElementById('antiAdblockNotice');
+    const adultDirectUrl = document.getElementById('adultDirectUrl');
+
+    if (antiAdblockEnabled) antiAdblockEnabled.checked = s.antiAdblockEnabled !== false;
+    if (adultAdsAlwaysActive) adultAdsAlwaysActive.checked = s.adultAdsAlwaysActive !== false;
+    if (adultAdsTriggerOnPlay) adultAdsTriggerOnPlay.checked = s.adultAdsTriggerOnPlay !== false;
+    if (antiAdblockNotice) antiAdblockNotice.checked = s.antiAdblockNotice !== false;
+    if (adultDirectUrl) adultDirectUrl.value = s.adultDirectUrl || '';
+  }
+
+  // Bottom Banner Quick Format Template Inserters
+  const bottomTemplate300Btn = document.getElementById('bottomTemplate300Btn');
+  const bottomTemplateNativeBtn = document.getElementById('bottomTemplateNativeBtn');
+  const bottomTemplate728Btn = document.getElementById('bottomTemplate728Btn');
+  const bottomTemplateCustomBtn = document.getElementById('bottomTemplateCustomBtn');
+
+  if (bottomTemplate300Btn && adsterraBannerBottom) {
+    bottomTemplate300Btn.addEventListener('click', () => {
+      adsterraBannerBottom.value = `<script type="text/javascript">
+\tatOptions = {
+\t\t'key' : 'YOUR_300x250_ADSTERRA_KEY',
+\t\t'format' : 'iframe',
+\t\t'height' : 250,
+\t\t'width' : 300,
+\t\t'params' : {}
+\t};
+</script>
+<script type="text/javascript" src="//www.topcreativeformat.com/YOUR_300x250_ADSTERRA_KEY/invoke.js"></script>`;
+      showToast("300x250 বড় ব্যানার ফরম্যাট পেস্ট করা হয়েছে! 'YOUR_300x250_ADSTERRA_KEY' বদলে আপনার Adsterra কী দিন।");
+    });
+  }
+
+  if (bottomTemplateNativeBtn && adsterraBannerBottom) {
+    bottomTemplateNativeBtn.addEventListener('click', () => {
+      adsterraBannerBottom.value = `<script async="async" data-cfasync="false" src="//pl12345678.profitablegatecpm.com/YOUR_NATIVE_KEY/invoke.js"></script>
+<div id="container-YOUR_NATIVE_KEY"></div>`;
+      showToast("Native 4x1 কার্ড ফরম্যাট পেস্ট করা হয়েছে! আপনার Adsterra Native স্ক্রিপ্ট দিন।");
+    });
+  }
+
+  if (bottomTemplate728Btn && adsterraBannerBottom) {
+    bottomTemplate728Btn.addEventListener('click', () => {
+      adsterraBannerBottom.value = `<script type="text/javascript">
+\tatOptions = {
+\t\t'key' : 'YOUR_728x90_ADSTERRA_KEY',
+\t\t'format' : 'iframe',
+\t\t'height' : 90,
+\t\t'width' : 728,
+\t\t'params' : {}
+\t};
+</script>
+<script type="text/javascript" src="//www.topcreativeformat.com/YOUR_728x90_ADSTERRA_KEY/invoke.js"></script>`;
+      showToast("728x90 লিডারবোর্ড ব্যানার ফরম্যাট পেস্ট করা হয়েছে!");
+    });
+  }
+
+  if (bottomTemplateCustomBtn && adsterraBannerBottom) {
+    bottomTemplateCustomBtn.addEventListener('click', () => {
+      const targetLink = (adsterraSmartlink && adsterraSmartlink.value) ? adsterraSmartlink.value : 'https://your-adult-direct-link.com';
+      adsterraBannerBottom.value = `<div style="text-align:center; padding:16px; border-radius:12px; background:linear-gradient(135deg, #1e1b4b, #311042); border:1.5px solid #ec4899; box-shadow:0 8px 24px rgba(236,72,153,0.25); max-width:600px; margin:0 auto; width:100%;">
+  <a href="${targetLink}" target="_blank" rel="noopener noreferrer" style="display:block; text-decoration:none; color:#fff;">
+    <div style="display:inline-block; background:#e11d48; color:#fff; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; margin-bottom:8px;">🔞 18+ VIP LIVE EXCLUSIVE</div>
+    <div style="font-size:17px; font-weight:700; margin-bottom:6px; color:#f43f5e;">⚡ আনকাট ফুল HD ভিডিও ও সরাসরি ডাউনলোড লিংক</div>
+    <div style="font-size:13px; color:#cbd5e1; margin-bottom:12px;">কোনো বাফারিং নেই • হাই স্পিড আল্ট্রা 4K স্ট্রিমিং</div>
+    <span style="display:inline-block; background:linear-gradient(90deg, #f43f5e, #e11d48); color:#fff; font-weight:700; font-size:14px; padding:10px 28px; border-radius:8px; box-shadow:0 4px 14px rgba(225,29,72,0.4);">সরাসরি ওপেন করুন ▶</span>
+  </a>
+</div>`;
+      showToast("কাস্টম প্রিমিয়াম ১৮+ ব্যানার ফরম্যাট পেস্ট করা হয়েছে!");
+    });
   }
 
   if (settingPrimaryColorPicker && settingPrimaryColor) {
@@ -1865,7 +2025,12 @@
         adsterraMessageAdCode: (adsterraMessageAdCode ? adsterraMessageAdCode.value : '').trim(),
         adsterraMessageSender: (adsterraMessageSender ? adsterraMessageSender.value : '').trim() || '💬 (1) নতুন নোটিফিকেশন',
         adsterraMessageText: (adsterraMessageText ? adsterraMessageText.value : '').trim() || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...',
-        adsterraMessageBtnText: (adsterraMessageBtnText ? adsterraMessageBtnText.value : '').trim() || 'ওপেন করুন ⚡'
+        adsterraMessageBtnText: (adsterraMessageBtnText ? adsterraMessageBtnText.value : '').trim() || 'ওপেন করুন ⚡',
+        antiAdblockEnabled: document.getElementById('antiAdblockEnabled') ? document.getElementById('antiAdblockEnabled').checked : true,
+        adultAdsAlwaysActive: document.getElementById('adultAdsAlwaysActive') ? document.getElementById('adultAdsAlwaysActive').checked : true,
+        adultAdsTriggerOnPlay: document.getElementById('adultAdsTriggerOnPlay') ? document.getElementById('adultAdsTriggerOnPlay').checked : true,
+        antiAdblockNotice: document.getElementById('antiAdblockNotice') ? document.getElementById('antiAdblockNotice').checked : true,
+        adultDirectUrl: (document.getElementById('adultDirectUrl') ? document.getElementById('adultDirectUrl').value : '').trim()
       };
 
       if (!isLocalMode && db) {

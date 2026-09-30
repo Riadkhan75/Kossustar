@@ -61,7 +61,7 @@
 
         <!-- Right Navbar Actions -->
         <div class="navbar-actions">
-          <div class="live-badge" id="navLiveBadge">
+          <div class="live-badge" id="navLiveBadge" role="button" tabindex="0" title="🔴 লাইভ ৪কে সম্প্রচার দেখুন (LIVE 4K)" aria-label="Watch LIVE 4K Stream">
             <span class="pulse-dot"></span>
             <span id="liveBadgeText">LIVE 4K</span>
           </div>
@@ -133,7 +133,7 @@
       </section>
 
       <!-- Adsterra Top Ad Banner Slot (Rendered if set in Admin) -->
-      <div id="adsterraTopSlot" class="adsterra-slot"></div>
+      <div id="adsterraTopSlot" class="adsterra-slot rk-stream-feature-top" data-ad-protection="active"></div>
 
       <!-- Adsterra Smartlink Floating / Header Bar (Rendered if set in Admin) -->
       <div id="homeSmartlinkBanner" class="smartlink-home-banner" style="display: none;">
@@ -180,8 +180,27 @@
       </section>
 
       <!-- Adsterra Bottom Ad Banner Slot (Rendered if set in Admin) -->
-      <div id="adsterraBottomSlot" class="adsterra-slot"></div>
+      <div id="adsterraBottomSlot" class="adsterra-slot rk-stream-feature-bottom" data-ad-protection="active"></div>
     </main>
+
+    <!-- Anti-AdBlock Notice Modal -->
+    <div id="adblockNoticeModal" class="adblock-modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
+      <div class="adblock-modal-box">
+        <div class="adblock-icon-wrap">🛡️</div>
+        <h3 class="adblock-title">অ্যাডব্লকার সনাক্ত হয়েছে!</h3>
+        <p class="adblock-desc">
+          আমাদের সাইটের ভিডিও স্ট্রিমিং ও স্পিড ১০০% ফ্রি রাখতে বিজ্ঞাপনের সাপোর্ট প্রয়োজন। অনুগ্রহ করে আপনার ব্রাউজারের <strong>AdBlocker / Brave Shields বন্ধ করুন</strong>।
+        </p>
+        <div class="adblock-actions">
+          <button type="button" class="adblock-unblock-btn" id="adblockRefreshBtn">
+            🔄 অ্যাডব্লকার বন্ধ করেছি (রিফ্রেশ করুন)
+          </button>
+          <button type="button" class="adblock-continue-btn" id="adblockDismissBtn">
+            বিজ্ঞাপন অনুমোদন করে চালিয়ে যান
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Video Player Modal -->
     <div class="player-modal-backdrop" id="playerModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="playerTitle">
@@ -199,6 +218,10 @@
 
         <!-- Media Wrap -->
         <div class="player-media-wrap">
+          <div id="playerLiveIndicator" class="player-live-badge" style="display: none;">
+            <span class="pulse-dot"></span>
+            <span>LIVE 4K</span>
+          </div>
           <video 
             id="mainVideoPlayer" 
             class="player-video" 
@@ -392,6 +415,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
 
     <!-- Firebase Config & Logic -->

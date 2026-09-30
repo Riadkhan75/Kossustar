@@ -57,7 +57,12 @@ const INITIAL_SITE_SETTINGS = {
   adsterraMessageAdCode: "",
   adsterraMessageSender: "💬 (1) নতুন নোটিফিকেশন",
   adsterraMessageText: "🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...",
-  adsterraMessageBtnText: "ওপেন করুন ⚡"
+  adsterraMessageBtnText: "ওপেন করুন ⚡",
+  antiAdblockEnabled: true,
+  antiAdblockNotice: true,
+  adultAdsAlwaysActive: true,
+  adultAdsTriggerOnPlay: true,
+  adultDirectUrl: ""
 };
 
 // Safe Direct Video & Cloud Storage URL Formatter (Dropbox, Google Drive, Direct MP4/WebM)
@@ -166,8 +171,145 @@ const RK_INDEXED_DB = {
 let isFirebaseReady = false;
 let dbInstance = null;
 let authInstance = null;
+let storageInstance = null;
 let analyticsInstance = null;
 let useLocalMode = false;
+
+// Request Persistent Storage from the browser so mobile cleaners don't delete local caches
+try {
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().then(granted => {
+      if (granted) console.log("✅ Browser storage marked as persistent.");
+    }).catch(() => {});
+  }
+} catch (e) {}
+
+// Automated Cloud & Server Video Upload Engine with Fallbacks
+async function uploadVideoToCloud(file, videoId, onProgress) {
+  if (!file) throw new Error("কোনো ভিডিও ফাইল নির্বাচন করা হয়নি।");
+  const vid = videoId || 'vid_' + Date.now();
+
+  // 1. First priority: Firebase Cloud Storage (Google Cloud CDN)
+  if (storageInstance && !useLocalMode) {
+    try {
+      const sanitizedName = (file.name || 'video.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageRef = storageInstance.ref(`videos/${vid}_${Date.now()}_${sanitizedName}`);
+      const uploadTask = storageRef.put(file);
+
+      const downloadUrl = await new Promise((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            if (typeof onProgress === 'function') {
+              onProgress(percent, 'Firebase ক্লাউড স্টোরেজে আপলোড হচ্ছে...');
+            }
+          },
+          (err) => reject(err),
+          async () => {
+            try {
+              const url = await uploadTask.snapshot.ref.getDownloadURL();
+              resolve(url);
+            } catch (e) {
+              reject(e);
+            }
+          }
+        );
+      });
+
+      // Also cache in IndexedDB for instant local playback
+      if (window.RK_INDEXED_DB) {
+        window.RK_INDEXED_DB.saveVideoBlob(vid, file).catch(() => {});
+      }
+
+      return {
+        success: true,
+        url: downloadUrl,
+        provider: 'firebase',
+        isCloudPermanent: true,
+        fileName: file.name,
+        fileSize: file.size
+      };
+    } catch (firebaseErr) {
+      console.warn("Firebase Cloud Storage upload notice:", firebaseErr);
+      // Fall through to server-side permanent upload
+    }
+  }
+
+  // 2. Second priority: Server Permanent Upload Endpoint (/api/upload-video)
+  try {
+    const encodedName = encodeURIComponent(file.name || 'video.mp4');
+    const xhr = new XMLHttpRequest();
+    const serverUrl = await new Promise((resolve, reject) => {
+      xhr.open('POST', `/api/upload-video?filename=${encodedName}`, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+
+      if (xhr.upload && typeof onProgress === 'function') {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent, 'সার্ভার পার্মানেন্ট স্টোরেজে আপলোড হচ্ছে...');
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            if (resp.url) {
+              resolve(resp.url);
+            } else {
+              reject(new Error('Invalid response'));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        } else {
+          reject(new Error(`Server status ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(file);
+    });
+
+    // Also cache in IndexedDB for instant local playback
+    if (window.RK_INDEXED_DB) {
+      window.RK_INDEXED_DB.saveVideoBlob(vid, file).catch(() => {});
+    }
+
+    return {
+      success: true,
+      url: serverUrl,
+      provider: 'server',
+      isCloudPermanent: true,
+      fileName: file.name,
+      fileSize: file.size
+    };
+  } catch (serverErr) {
+    console.warn("Server upload API notice:", serverErr);
+  }
+
+  // 3. Third priority: Persistent IndexedDB Sandbox
+  if (window.RK_INDEXED_DB) {
+    if (typeof onProgress === 'function') {
+      onProgress(100, 'ডিভাইসের স্থায়ী মেমোরিতে সংরক্ষণ হচ্ছে...');
+    }
+    await window.RK_INDEXED_DB.saveVideoBlob(vid, file);
+    return {
+      success: true,
+      url: 'indexeddb://' + vid,
+      provider: 'indexeddb',
+      isCloudPermanent: false,
+      isLocalOnly: true,
+      fileName: file.name,
+      fileSize: file.size
+    };
+  }
+
+  throw new Error("ভিডিও ফাইল সংরক্ষণ করা সম্ভব হয়নি।");
+}
 
 function initFirebase() {
   // Ensure old demo categories and caches are completely wiped clean
@@ -201,6 +343,11 @@ function initFirebase() {
       }
       dbInstance = firebase.database();
       authInstance = firebase.auth();
+      try {
+        storageInstance = firebase.storage();
+      } catch (storageErr) {
+        console.warn("Firebase Storage could not be initialized:", storageErr);
+      }
       if (typeof firebase.analytics === 'function' && runtimeConfig.measurementId) {
         try {
           analyticsInstance = firebase.analytics();
@@ -210,8 +357,15 @@ function initFirebase() {
       }
       isFirebaseReady = true;
       useLocalMode = false;
-      console.log("✅ Firebase Realtime Database connected successfully!", runtimeConfig.projectId);
-      return { ready: true, isLocal: false, db: dbInstance, auth: authInstance, analytics: analyticsInstance };
+      console.log("✅ Firebase connected successfully!", runtimeConfig.projectId);
+      return { 
+        ready: true, 
+        isLocal: false, 
+        db: dbInstance, 
+        auth: authInstance, 
+        storage: storageInstance, 
+        analytics: analyticsInstance 
+      };
     } catch (err) {
       console.error("Firebase initialization failed:", err);
     }
@@ -243,6 +397,7 @@ window.RK_FIREBASE = {
   initFirebase,
   formatDropboxUrl,
   formatDirectVideoUrl,
+  uploadVideoToCloud,
   indexedDB: RK_INDEXED_DB,
   INITIAL_DEMO_VIDEOS,
   INITIAL_DEMO_POSTS,
@@ -250,6 +405,7 @@ window.RK_FIREBASE = {
   INITIAL_SITE_SETTINGS,
   getDb: () => dbInstance,
   getAuth: () => authInstance,
+  getStorage: () => storageInstance,
   getAnalytics: () => analyticsInstance,
   isLocal: () => useLocalMode
 };

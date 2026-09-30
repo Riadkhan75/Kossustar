@@ -53,6 +53,17 @@
   const playerLikeBtn = document.getElementById('playerLikeBtn');
   const playerLikeBtnText = document.getElementById('playerLikeBtnText');
   const playerShareBtn = document.getElementById('playerShareBtn');
+  const playerLiveIndicator = document.getElementById('playerLiveIndicator');
+  const navLiveBadge = document.getElementById('navLiveBadge');
+
+  // Anti-Adblock Modal Elements
+  const adblockNoticeModal = document.getElementById('adblockNoticeModal');
+  const adblockRefreshBtn = document.getElementById('adblockRefreshBtn');
+  const adblockDismissBtn = document.getElementById('adblockDismissBtn');
+
+  // Dynamic Settings & Live Mode State
+  let currentSettings = { ...(window.RK_FIREBASE ? window.RK_FIREBASE.INITIAL_SITE_SETTINGS : {}) };
+  let liveBroadcastInterval = null;
 
   // Controls & Extras
   const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -94,6 +105,7 @@
   // Safe Direct Video & Cloud Storage URL Formatter
   function safeVideoUrl(url) {
     if (!url) return '';
+    if (url.startsWith('/uploads/')) return url;
     if (window.RK_FIREBASE && window.RK_FIREBASE.formatDirectVideoUrl) {
       return window.RK_FIREBASE.formatDirectVideoUrl(url);
     }
@@ -103,8 +115,8 @@
     return url;
   }
 
-  // Safely Render Adsterra Ad Snippets (executing script tags in isolated context to prevent document.write collisions)
-  function renderAdSnippet(container, code) {
+  // Safely Render Adsterra Ad Snippets with Anti-Adblock Shield & Smart Bypass
+  function renderAdSnippet(container, code, slotName = 'top') {
     if (!container) return;
     container.innerHTML = '';
     if (!code || !code.trim()) {
@@ -112,18 +124,41 @@
       return;
     }
     container.style.display = 'flex';
+    container.setAttribute('data-ad-protection', 'active');
 
     try {
+      // Detect requested dimensions from Adsterra snippet (e.g. 'height' : 250, 'width': 300)
+      let initialHeight = 90;
+      const heightMatch = code.match(/['"]?height['"]?\s*[:=]\s*(\d+)/i);
+      if (heightMatch && heightMatch[1]) {
+        initialHeight = parseInt(heightMatch[1], 10);
+      } else if (code.toLowerCase().includes('300x250') || code.toLowerCase().includes('250')) {
+        initialHeight = 260;
+      } else if (code.toLowerCase().includes('native') || code.toLowerCase().includes('4x1') || code.toLowerCase().includes('4x2')) {
+        initialHeight = 360;
+      }
+
       // If code contains script tags (standard Adsterra atOptions + invoke.js)
       if (code.includes('<script')) {
         const iframe = document.createElement('iframe');
-        iframe.style.border = 'none';
-        iframe.style.overflow = 'hidden';
-        iframe.style.width = '100%';
-        iframe.style.minHeight = '70px';
-        iframe.style.display = 'block';
+        iframe.style.cssText = `border:none;overflow:hidden;width:100%;height:${Math.max(initialHeight, 80)}px;min-height:${Math.max(initialHeight, 80)}px;display:flex!important;visibility:visible!important;`;
         iframe.scrolling = 'no';
         iframe.setAttribute('loading', 'lazy');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation-by-user-activation');
+
+        iframe.onload = () => {
+          try {
+            if (iframe.contentWindow && iframe.contentWindow.document.body) {
+              const scrollH = iframe.contentWindow.document.body.scrollHeight;
+              if (scrollH && scrollH > 60) {
+                iframe.style.height = `${scrollH + 8}px`;
+              }
+            }
+          } catch(e) {
+            // Sandboxed cross-origin fallback
+          }
+        };
+
         iframe.srcdoc = `
           <!DOCTYPE html>
           <html>
@@ -138,6 +173,8 @@
                   justify-content: center;
                   align-items: center;
                   min-height: 100%;
+                  width: 100%;
+                  overflow: hidden;
                 }
               </style>
             </head>
@@ -146,12 +183,80 @@
             </body>
           </html>
         `;
+
         container.appendChild(iframe);
+
+        // Anti-Adblock Detection & Unblockable Direct Link Fallback Watcher
+        setTimeout(() => {
+          checkAdBlockState(container, slotName);
+        }, 2200);
+
       } else {
         container.innerHTML = code;
       }
     } catch (e) {
       console.warn("Error rendering Adsterra snippet:", e);
+    }
+  }
+
+  // Anti-Adblock Detection: Replaces collapsed ad space with high-converting unblockable sponsor card
+  function checkAdBlockState(container, slotName) {
+    if (!currentSettings || currentSettings.antiAdblockEnabled === false) return;
+    if (!container) return;
+
+    // Check if container or iframe has been blocked/collapsed to zero height by AdBlock
+    const isBlocked = container.offsetHeight < 20 || (container.firstElementChild && container.firstElementChild.offsetHeight < 10);
+    
+    if (isBlocked) {
+      const smartlink = currentSettings.adultDirectUrl || currentSettings.adsterraSmartlink;
+      if (smartlink) {
+        container.innerHTML = `
+          <a href="${escapeHtml(smartlink)}" target="_blank" rel="noopener noreferrer" class="rk-unblockable-ad-card">
+            <div class="rk-unblockable-ad-left">
+              <span class="rk-unblockable-ad-badge">18+ VIP</span>
+              <div class="rk-unblockable-ad-title">
+                ${escapeHtml(currentSettings.adsterraSmartlinkText || '⚡ আনলিমিটেড ফুল HD ভিডিও ডাউনলোড ও সরাসরি লিংক')}
+              </div>
+            </div>
+            <span class="rk-unblockable-ad-btn">ওপেন করুন ▶</span>
+          </a>
+        `;
+        container.style.display = 'flex';
+      }
+
+      // If notice enabled, show courteous modal once per session
+      if (currentSettings.antiAdblockNotice !== false && !sessionStorage.getItem('rk_adblock_dismissed')) {
+        if (adblockNoticeModal) adblockNoticeModal.classList.add('open');
+      }
+    }
+  }
+
+  // Adult Ads Always Active: Trigger on user interaction so browsers never block it as a popup
+  function triggerAdultAdGesture() {
+    if (!currentSettings || currentSettings.adultAdsAlwaysActive === false) return;
+    const targetUrl = currentSettings.adultDirectUrl || currentSettings.adsterraSmartlink;
+    if (!targetUrl) return;
+
+    const now = Date.now();
+    const lastTrigger = parseInt(sessionStorage.getItem('rk_adult_ad_click_time') || '0', 10);
+    // Allow trigger on user clicks with a healthy 60-second window
+    if (now - lastTrigger > 60000) {
+      sessionStorage.setItem('rk_adult_ad_click_time', now.toString());
+      try {
+        const adWin = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        if (adWin) {
+          adWin.blur();
+          window.focus();
+        }
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = targetUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     }
   }
 
@@ -310,6 +415,7 @@
   // Dynamic Site Settings Application
   function applySiteSettings(settings) {
     if (!settings) return;
+    currentSettings = { ...currentSettings, ...settings };
 
     // Website Name Update (Instantly reflected on Home, Menu, Footer, and Title)
     if (settings.siteName) {
@@ -351,13 +457,13 @@
     const adsterraEnabled = settings.adsterraEnabled !== false;
     if (adsterraEnabled) {
       if (settings.adsterraBannerTop && adsterraTopSlot) {
-        renderAdSnippet(adsterraTopSlot, settings.adsterraBannerTop);
+        renderAdSnippet(adsterraTopSlot, settings.adsterraBannerTop, 'top');
       } else if (adsterraTopSlot) {
         adsterraTopSlot.style.display = 'none';
       }
 
       if (settings.adsterraBannerBottom && adsterraBottomSlot) {
-        renderAdSnippet(adsterraBottomSlot, settings.adsterraBannerBottom);
+        renderAdSnippet(adsterraBottomSlot, settings.adsterraBannerBottom, 'bottom');
       } else if (adsterraBottomSlot) {
         adsterraBottomSlot.style.display = 'none';
       }
@@ -525,10 +631,11 @@
 
     videoGrid.querySelectorAll('.video-card').forEach(card => {
       card.addEventListener('click', () => {
+        triggerAdultAdGesture();
         const vid = card.getAttribute('data-id');
         const found = allVideos.find(v => v.videoId === vid);
         if (found) {
-          openVideoPlayer(found);
+          openVideoPlayer(found, false);
         }
       });
       card.addEventListener('keydown', (e) => {
@@ -542,8 +649,27 @@
 
   let activeVideoBlobUrl = null;
 
-  // Open Video Player Modal
-  async function openVideoPlayer(video) {
+  // Start LIVE 4K Broadcast Stream on demand
+  function startLiveStreamBroadcast() {
+    const activeVideos = allVideos.filter(v => v.active !== false);
+    if (activeVideos.length === 0) {
+      showToast("🔴 বর্তমানে কোনো ভিডিও উপলব্ধ নেই। শীঘ্রই লাইভ সম্প্রচার শুরু হবে!");
+      return;
+    }
+
+    // Trigger adult ad gesture on user click
+    triggerAdultAdGesture();
+
+    // Pick a random video so each LIVE 4K click provides an exciting live stream
+    const randomIdx = Math.floor(Math.random() * activeVideos.length);
+    const liveVideo = activeVideos[randomIdx];
+
+    openVideoPlayer(liveVideo, true);
+    showToast("🔴 লাইভ ৪কে সম্প্রচার শুরু হয়েছে!");
+  }
+
+  // Open Video Player Modal (Supports both Standard & LIVE 4K Stream Mode)
+  async function openVideoPlayer(video, isLiveMode = false) {
     if (!video || !playerBackdrop || !mainVideoPlayer) return;
     activeVideo = video;
 
@@ -573,10 +699,39 @@
     }
 
     mainVideoPlayer.poster = video.thumbUrl || '';
-    if (playerTitle) playerTitle.textContent = video.title || 'ভিডিওর শিরোনাম';
-    if (playerHeaderTitle) playerHeaderTitle.textContent = video.title || 'ভিডিও প্লেয়ার';
-    if (playerCategoryTag) playerCategoryTag.textContent = video.category || 'Viral';
-    if (playerViewsCount) playerViewsCount.textContent = `👁 ${formatNumber(video.views || 0)} ভিউজ`;
+
+    // Handle LIVE 4K Mode vs Standard Mode
+    if (isLiveMode) {
+      if (playerLiveIndicator) playerLiveIndicator.style.display = 'flex';
+      if (playerHeaderTitle) playerHeaderTitle.innerHTML = '🔴 লাইভ ৪কে সম্প্রচার • LIVE 4K';
+      if (playerTitle) playerTitle.textContent = `🔴 LIVE 4K: ${video.title || 'লাইভ ভিডিও'}`;
+      if (playerCategoryTag) playerCategoryTag.textContent = '🔴 LIVE BROADCAST';
+      
+      let baseLiveViewers = Math.floor(Math.random() * 2500) + 1200;
+      if (playerViewsCount) {
+        playerViewsCount.textContent = `🔴 ${formatNumber(baseLiveViewers)} জন এখন লাইভ দেখছেন`;
+      }
+
+      if (liveBroadcastInterval) clearInterval(liveBroadcastInterval);
+      liveBroadcastInterval = setInterval(() => {
+        baseLiveViewers += Math.floor(Math.random() * 19) - 9;
+        if (baseLiveViewers < 500) baseLiveViewers = 1100;
+        if (playerViewsCount) {
+          playerViewsCount.textContent = `🔴 ${formatNumber(baseLiveViewers)} জন এখন লাইভ দেখছেন`;
+        }
+      }, 3500);
+    } else {
+      if (playerLiveIndicator) playerLiveIndicator.style.display = 'none';
+      if (liveBroadcastInterval) {
+        clearInterval(liveBroadcastInterval);
+        liveBroadcastInterval = null;
+      }
+      if (playerTitle) playerTitle.textContent = video.title || 'ভিডিওর শিরোনাম';
+      if (playerHeaderTitle) playerHeaderTitle.textContent = video.title || 'ভিডিও প্লেয়ার';
+      if (playerCategoryTag) playerCategoryTag.textContent = video.category || 'Viral';
+      if (playerViewsCount) playerViewsCount.textContent = `👁 ${formatNumber(video.views || 0)} ভিউজ`;
+    }
+
     if (playerLikesCount) playerLikesCount.textContent = `👍 ${formatNumber(video.likes || 0)} লাইক`;
 
     const isLiked = localStorage.getItem(`rk_liked_${video.videoId}`) === 'true';
@@ -598,6 +753,12 @@
   // Close Video Player Modal
   function closeVideoPlayer() {
     if (!playerBackdrop || !mainVideoPlayer) return;
+    if (liveBroadcastInterval) {
+      clearInterval(liveBroadcastInterval);
+      liveBroadcastInterval = null;
+    }
+    if (playerLiveIndicator) playerLiveIndicator.style.display = 'none';
+
     mainVideoPlayer.pause();
     if (activeVideoBlobUrl) {
       URL.revokeObjectURL(activeVideoBlobUrl);
@@ -803,6 +964,33 @@
 
     if (playerLikeBtn) playerLikeBtn.addEventListener('click', handleLike);
     if (playerShareBtn) playerShareBtn.addEventListener('click', handleShare);
+
+    // LIVE 4K Header Badge Click Handler: Opens Video in LIVE broadcast stream
+    if (navLiveBadge) {
+      navLiveBadge.addEventListener('click', (e) => {
+        e.preventDefault();
+        startLiveStreamBroadcast();
+      });
+      navLiveBadge.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          startLiveStreamBroadcast();
+        }
+      });
+    }
+
+    // Anti-Adblock Modal Actions
+    if (adblockRefreshBtn) {
+      adblockRefreshBtn.addEventListener('click', () => {
+        window.location.reload();
+      });
+    }
+    if (adblockDismissBtn && adblockNoticeModal) {
+      adblockDismissBtn.addEventListener('click', () => {
+        adblockNoticeModal.classList.remove('open');
+        sessionStorage.setItem('rk_adblock_dismissed', 'true');
+      });
+    }
 
     if (mainVideoPlayer) {
       mainVideoPlayer.addEventListener('error', (e) => {
