@@ -25,6 +25,12 @@
   const adminToastContainer = document.getElementById('adminToastContainer');
   const adminHeaderBrand = document.getElementById('adminHeaderBrand');
 
+  // Firebase Sync & Warning Elements
+  const firebasePermissionWarning = document.getElementById('firebasePermissionWarning');
+  const syncLocalDataBanner = document.getElementById('syncLocalDataBanner');
+  const syncLocalCount = document.getElementById('syncLocalCount');
+  const syncToFirebaseBtn = document.getElementById('syncToFirebaseBtn');
+
   // KPI Elements
   const kpiTotalVideos = document.getElementById('kpiTotalVideos');
   const kpiActiveVideos = document.getElementById('kpiActiveVideos');
@@ -130,6 +136,11 @@
   const adsterraSmartlinkText = document.getElementById('adsterraSmartlinkText');
   const adsterraSmartlinkPlayer = document.getElementById('adsterraSmartlinkPlayer');
   const adsterraSmartlinkFloating = document.getElementById('adsterraSmartlinkFloating');
+  const adsterraMessageAdEnabled = document.getElementById('adsterraMessageAdEnabled');
+  const adsterraMessageAdCode = document.getElementById('adsterraMessageAdCode');
+  const adsterraMessageSender = document.getElementById('adsterraMessageSender');
+  const adsterraMessageText = document.getElementById('adsterraMessageText');
+  const adsterraMessageBtnText = document.getElementById('adsterraMessageBtnText');
 
   // Confirmation Modals Elements
   const confirmDeleteModalBackdrop = document.getElementById('confirmDeleteModalBackdrop');
@@ -274,15 +285,96 @@
     if (adminLogoutBtn) adminLogoutBtn.style.display = 'inline-block';
   }
 
+  // Check if there are local videos waiting to be synced to Firebase
+  function checkSyncLocalDataBanner() {
+    try {
+      const stored = localStorage.getItem('rk_local_videos');
+      const localVideos = stored ? JSON.parse(stored) : [];
+      if (localVideos.length > 0 && adminVideos.length === 0 && syncLocalDataBanner) {
+        if (syncLocalCount) syncLocalCount.textContent = localVideos.length.toString();
+        syncLocalDataBanner.style.display = 'block';
+      } else if (syncLocalDataBanner) {
+        syncLocalDataBanner.style.display = 'none';
+      }
+    } catch(e) {}
+  }
+
+  async function syncLocalDataToFirebase() {
+    if (!db) {
+      showToast("Firebase ডাটাবেস সক্রিয় নেই!");
+      return;
+    }
+    if (syncToFirebaseBtn) {
+      syncToFirebaseBtn.disabled = true;
+      syncToFirebaseBtn.textContent = "সিঙ্ক হচ্ছে...";
+    }
+
+    try {
+      const vRaw = localStorage.getItem('rk_local_videos');
+      const localVideos = vRaw ? JSON.parse(vRaw) : [];
+      const cRaw = localStorage.getItem('rk_local_categories');
+      const localCategories = cRaw ? JSON.parse(cRaw) : [];
+      const sRaw = localStorage.getItem('rk_local_settings');
+      const localSettings = sRaw ? JSON.parse(sRaw) : null;
+
+      // 1. Sync videos to Firebase Realtime Database
+      for (const v of localVideos) {
+        if (v && v.videoId) {
+          await db.ref(`videos/${v.videoId}`).set(v);
+        }
+      }
+
+      // 2. Sync categories to Firebase
+      for (const c of localCategories) {
+        if (c && c.id) {
+          await db.ref(`categories/${c.id}`).set(c);
+        }
+      }
+
+      // 3. Sync settings to Firebase
+      if (localSettings) {
+        await db.ref('settings').update(localSettings);
+      }
+
+      showToast("🎉 চমৎকার! সব ভিডিও ও সেটিংস সফলভাবে Firebase-এ সিঙ্ক হয়েছে!");
+      if (syncLocalDataBanner) syncLocalDataBanner.style.display = 'none';
+    } catch(err) {
+      console.error("Sync error:", err);
+      if (err.message && err.message.includes('permission_denied')) {
+        if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'block';
+        showToast("⚠️ Firebase পারমিশন ত্রুটি! Firebase Console থেকে Rules সেট করুন।");
+      } else {
+        showToast("সিঙ্ক ত্রুটি: " + err.message);
+      }
+    } finally {
+      if (syncToFirebaseBtn) {
+        syncToFirebaseBtn.disabled = false;
+        syncToFirebaseBtn.textContent = "🚀 Firebase-এ সিঙ্ক করুন";
+      }
+    }
+  }
+
+  if (syncToFirebaseBtn) {
+    syncToFirebaseBtn.addEventListener('click', syncLocalDataToFirebase);
+  }
+
   // Load Data
   function loadData() {
     if (!isLocalMode && db) {
       // 1. Listen for Videos
       db.ref('videos').on('value', snapshot => {
+        if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'none';
         const val = snapshot.val();
         adminVideos = val ? Object.keys(val).map(k => ({ ...val[k], videoId: val[k].videoId || k })) : [];
         renderAdminVideos();
         updateKpis();
+        checkSyncLocalDataBanner();
+      }, err => {
+        console.error("Firebase videos fetch error:", err);
+        if (err.code === 'PERMISSION_DENIED' || (err.message && err.message.includes('permission_denied'))) {
+          if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'block';
+        }
+        loadLocalData();
       });
 
       // 2. Listen for Categories
@@ -292,12 +384,16 @@
         renderAdminCategories();
         populateCategoryDropdown();
         updateKpis();
+      }, err => {
+        console.error("Firebase categories fetch error:", err);
       });
 
       // 3. Listen for Settings
       db.ref('settings').on('value', snapshot => {
         adminSettings = snapshot.val() || window.RK_FIREBASE.INITIAL_SITE_SETTINGS;
         populateSettings(adminSettings);
+      }, err => {
+        console.error("Firebase settings fetch error:", err);
       });
 
       updateFirebaseBadge();
@@ -1724,6 +1820,12 @@
     if (adsterraSmartlinkText) adsterraSmartlinkText.value = s.adsterraSmartlinkText || '⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক';
     if (adsterraSmartlinkPlayer) adsterraSmartlinkPlayer.checked = s.adsterraSmartlinkPlayer !== false;
     if (adsterraSmartlinkFloating) adsterraSmartlinkFloating.checked = s.adsterraSmartlinkFloating !== false;
+
+    if (adsterraMessageAdEnabled) adsterraMessageAdEnabled.checked = s.adsterraMessageAdEnabled !== false;
+    if (adsterraMessageAdCode) adsterraMessageAdCode.value = s.adsterraMessageAdCode || '';
+    if (adsterraMessageSender) adsterraMessageSender.value = s.adsterraMessageSender || '💬 (1) নতুন নোটিফিকেশন';
+    if (adsterraMessageText) adsterraMessageText.value = s.adsterraMessageText || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...';
+    if (adsterraMessageBtnText) adsterraMessageBtnText.value = s.adsterraMessageBtnText || 'ওপেন করুন ⚡';
   }
 
   if (settingPrimaryColorPicker && settingPrimaryColor) {
@@ -1749,7 +1851,12 @@
         adsterraSmartlink: (adsterraSmartlink ? adsterraSmartlink.value : '').trim(),
         adsterraSmartlinkText: (adsterraSmartlinkText ? adsterraSmartlinkText.value : '').trim() || '⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক',
         adsterraSmartlinkPlayer: adsterraSmartlinkPlayer ? adsterraSmartlinkPlayer.checked : true,
-        adsterraSmartlinkFloating: adsterraSmartlinkFloating ? adsterraSmartlinkFloating.checked : true
+        adsterraSmartlinkFloating: adsterraSmartlinkFloating ? adsterraSmartlinkFloating.checked : true,
+        adsterraMessageAdEnabled: adsterraMessageAdEnabled ? adsterraMessageAdEnabled.checked : true,
+        adsterraMessageAdCode: (adsterraMessageAdCode ? adsterraMessageAdCode.value : '').trim(),
+        adsterraMessageSender: (adsterraMessageSender ? adsterraMessageSender.value : '').trim() || '💬 (1) নতুন নোটিফিকেশন',
+        adsterraMessageText: (adsterraMessageText ? adsterraMessageText.value : '').trim() || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...',
+        adsterraMessageBtnText: (adsterraMessageBtnText ? adsterraMessageBtnText.value : '').trim() || 'ওপেন করুন ⚡'
       };
 
       if (!isLocalMode && db) {
@@ -1811,8 +1918,9 @@
 
   function updateFirebaseBadge() {
     if (!firebaseStatusBadge) return;
+    const projId = (window.RK_FIREBASE && window.RK_FIREBASE.config && window.RK_FIREBASE.config.projectId) || 'rk-portfolio-66771';
     if (!isLocalMode && db) {
-      firebaseStatusBadge.textContent = '🟢 ফায়ারবেস সক্রিয় (Connected)';
+      firebaseStatusBadge.textContent = `🟢 ফায়ারবেস সক্রিয় (${projId})`;
       firebaseStatusBadge.style.backgroundColor = '#dcfce7';
       firebaseStatusBadge.style.color = '#15803d';
     } else {
@@ -1825,6 +1933,8 @@
       const saved = localStorage.getItem('rk_firebase_config');
       if (saved && firebaseConfigInput && !firebaseConfigInput.value) {
         firebaseConfigInput.value = saved;
+      } else if (window.RK_FIREBASE && window.RK_FIREBASE.config && firebaseConfigInput && !firebaseConfigInput.value) {
+        firebaseConfigInput.value = JSON.stringify(window.RK_FIREBASE.config, null, 2);
       }
     } catch (e) {}
   }

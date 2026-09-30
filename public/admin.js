@@ -25,6 +25,12 @@
   const adminToastContainer = document.getElementById('adminToastContainer');
   const adminHeaderBrand = document.getElementById('adminHeaderBrand');
 
+  // Firebase Sync & Warning Elements
+  const firebasePermissionWarning = document.getElementById('firebasePermissionWarning');
+  const syncLocalDataBanner = document.getElementById('syncLocalDataBanner');
+  const syncLocalCount = document.getElementById('syncLocalCount');
+  const syncToFirebaseBtn = document.getElementById('syncToFirebaseBtn');
+
   // KPI Elements
   const kpiTotalVideos = document.getElementById('kpiTotalVideos');
   const kpiActiveVideos = document.getElementById('kpiActiveVideos');
@@ -75,6 +81,50 @@
   let currentCapturedThumb = '';
   let existingVideoThumb = '';
 
+  // Bulk / Multiple Videos DOM Elements
+  const addMultipleVideosBtn = document.getElementById('addMultipleVideosBtn');
+  const switchToBulkModalBtn = document.getElementById('switchToBulkModalBtn');
+  const bulkVideoModalBackdrop = document.getElementById('bulkVideoModalBackdrop');
+  const closeBulkVideoModalBtn = document.getElementById('closeBulkVideoModalBtn');
+  const bulkTabFiles = document.getElementById('bulkTabFiles');
+  const bulkTabUrls = document.getElementById('bulkTabUrls');
+  const bulkFilesSection = document.getElementById('bulkFilesSection');
+  const bulkUrlsSection = document.getElementById('bulkUrlsSection');
+
+  // Bulk Mode 1 (Files) Elements
+  const bulkFilesCategory = document.getElementById('bulkFilesCategory');
+  const bulkFilesCustomCategory = document.getElementById('bulkFilesCustomCategory');
+  const bulkVideoDropZone = document.getElementById('bulkVideoDropZone');
+  const bulkVideoFilesInput = document.getElementById('bulkVideoFilesInput');
+  const bulkQueueContainer = document.getElementById('bulkQueueContainer');
+  const bulkQueueCount = document.getElementById('bulkQueueCount');
+  const bulkClearQueueBtn = document.getElementById('bulkClearQueueBtn');
+  const bulkQueueList = document.getElementById('bulkQueueList');
+  const bulkFilesProgressContainer = document.getElementById('bulkFilesProgressContainer');
+  const bulkFilesProgressStatus = document.getElementById('bulkFilesProgressStatus');
+  const bulkFilesProgressPercent = document.getElementById('bulkFilesProgressPercent');
+  const bulkFilesProgressFill = document.getElementById('bulkFilesProgressFill');
+  const cancelBulkFilesBtn = document.getElementById('cancelBulkFilesBtn');
+  const saveBulkFilesBtn = document.getElementById('saveBulkFilesBtn');
+  const saveBulkFilesCount = document.getElementById('saveBulkFilesCount');
+
+  // Bulk Mode 2 (URLs) Elements
+  const bulkUrlsCategory = document.getElementById('bulkUrlsCategory');
+  const bulkUrlsCustomCategory = document.getElementById('bulkUrlsCustomCategory');
+  const bulkUrlsSampleBtn = document.getElementById('bulkUrlsSampleBtn');
+  const bulkUrlsTextarea = document.getElementById('bulkUrlsTextarea');
+  const bulkUrlsCountBadge = document.getElementById('bulkUrlsCountBadge');
+  const bulkUrlsProgressContainer = document.getElementById('bulkUrlsProgressContainer');
+  const bulkUrlsProgressStatus = document.getElementById('bulkUrlsProgressStatus');
+  const bulkUrlsProgressPercent = document.getElementById('bulkUrlsProgressPercent');
+  const bulkUrlsProgressFill = document.getElementById('bulkUrlsProgressFill');
+  const cancelBulkUrlsBtn = document.getElementById('cancelBulkUrlsBtn');
+  const saveBulkUrlsBtn = document.getElementById('saveBulkUrlsBtn');
+
+  let activeBulkTab = 'files'; // 'files' | 'urls'
+  let bulkQueueFiles = []; // Array of { id, file, title, duration, thumbUrl }
+  let isBulkProcessing = false;
+
   // Adsterra Ads Elements
   const adsterraForm = document.getElementById('adsterraForm');
   const adsterraEnabledSwitch = document.getElementById('adsterraEnabledSwitch');
@@ -82,6 +132,32 @@
   const adsterraBannerBottom = document.getElementById('adsterraBannerBottom');
   const adsterraPopunder = document.getElementById('adsterraPopunder');
   const adsterraSocialBar = document.getElementById('adsterraSocialBar');
+  const adsterraSmartlink = document.getElementById('adsterraSmartlink');
+  const adsterraSmartlinkText = document.getElementById('adsterraSmartlinkText');
+  const adsterraSmartlinkPlayer = document.getElementById('adsterraSmartlinkPlayer');
+  const adsterraSmartlinkFloating = document.getElementById('adsterraSmartlinkFloating');
+  const adsterraMessageAdEnabled = document.getElementById('adsterraMessageAdEnabled');
+  const adsterraMessageAdCode = document.getElementById('adsterraMessageAdCode');
+  const adsterraMessageSender = document.getElementById('adsterraMessageSender');
+  const adsterraMessageText = document.getElementById('adsterraMessageText');
+  const adsterraMessageBtnText = document.getElementById('adsterraMessageBtnText');
+
+  // Confirmation Modals Elements
+  const confirmDeleteModalBackdrop = document.getElementById('confirmDeleteModalBackdrop');
+  const confirmDeleteVideoTitle = document.getElementById('confirmDeleteVideoTitle');
+  const confirmDeleteVideoBtn = document.getElementById('confirmDeleteVideoBtn');
+  const cancelDeleteVideoBtn = document.getElementById('cancelDeleteVideoBtn');
+  let videoToDeleteId = null;
+
+  const confirmClearAllModalBackdrop = document.getElementById('confirmClearAllModalBackdrop');
+  const confirmClearAllBtn = document.getElementById('confirmClearAllBtn');
+  const cancelClearAllBtn = document.getElementById('cancelClearAllBtn');
+
+  const confirmDeleteCatModalBackdrop = document.getElementById('confirmDeleteCatModalBackdrop');
+  const confirmDeleteCatName = document.getElementById('confirmDeleteCatName');
+  const confirmDeleteCatBtn = document.getElementById('confirmDeleteCatBtn');
+  const cancelDeleteCatBtn = document.getElementById('cancelDeleteCatBtn');
+  let catToDeleteId = null;
 
   // Site Settings Elements
   const siteSettingsForm = document.getElementById('siteSettingsForm');
@@ -209,15 +285,96 @@
     if (adminLogoutBtn) adminLogoutBtn.style.display = 'inline-block';
   }
 
+  // Check if there are local videos waiting to be synced to Firebase
+  function checkSyncLocalDataBanner() {
+    try {
+      const stored = localStorage.getItem('rk_local_videos');
+      const localVideos = stored ? JSON.parse(stored) : [];
+      if (localVideos.length > 0 && adminVideos.length === 0 && syncLocalDataBanner) {
+        if (syncLocalCount) syncLocalCount.textContent = localVideos.length.toString();
+        syncLocalDataBanner.style.display = 'block';
+      } else if (syncLocalDataBanner) {
+        syncLocalDataBanner.style.display = 'none';
+      }
+    } catch(e) {}
+  }
+
+  async function syncLocalDataToFirebase() {
+    if (!db) {
+      showToast("Firebase ডাটাবেস সক্রিয় নেই!");
+      return;
+    }
+    if (syncToFirebaseBtn) {
+      syncToFirebaseBtn.disabled = true;
+      syncToFirebaseBtn.textContent = "সিঙ্ক হচ্ছে...";
+    }
+
+    try {
+      const vRaw = localStorage.getItem('rk_local_videos');
+      const localVideos = vRaw ? JSON.parse(vRaw) : [];
+      const cRaw = localStorage.getItem('rk_local_categories');
+      const localCategories = cRaw ? JSON.parse(cRaw) : [];
+      const sRaw = localStorage.getItem('rk_local_settings');
+      const localSettings = sRaw ? JSON.parse(sRaw) : null;
+
+      // 1. Sync videos to Firebase Realtime Database
+      for (const v of localVideos) {
+        if (v && v.videoId) {
+          await db.ref(`videos/${v.videoId}`).set(v);
+        }
+      }
+
+      // 2. Sync categories to Firebase
+      for (const c of localCategories) {
+        if (c && c.id) {
+          await db.ref(`categories/${c.id}`).set(c);
+        }
+      }
+
+      // 3. Sync settings to Firebase
+      if (localSettings) {
+        await db.ref('settings').update(localSettings);
+      }
+
+      showToast("🎉 চমৎকার! সব ভিডিও ও সেটিংস সফলভাবে Firebase-এ সিঙ্ক হয়েছে!");
+      if (syncLocalDataBanner) syncLocalDataBanner.style.display = 'none';
+    } catch(err) {
+      console.error("Sync error:", err);
+      if (err.message && err.message.includes('permission_denied')) {
+        if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'block';
+        showToast("⚠️ Firebase পারমিশন ত্রুটি! Firebase Console থেকে Rules সেট করুন।");
+      } else {
+        showToast("সিঙ্ক ত্রুটি: " + err.message);
+      }
+    } finally {
+      if (syncToFirebaseBtn) {
+        syncToFirebaseBtn.disabled = false;
+        syncToFirebaseBtn.textContent = "🚀 Firebase-এ সিঙ্ক করুন";
+      }
+    }
+  }
+
+  if (syncToFirebaseBtn) {
+    syncToFirebaseBtn.addEventListener('click', syncLocalDataToFirebase);
+  }
+
   // Load Data
   function loadData() {
     if (!isLocalMode && db) {
       // 1. Listen for Videos
       db.ref('videos').on('value', snapshot => {
+        if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'none';
         const val = snapshot.val();
         adminVideos = val ? Object.keys(val).map(k => ({ ...val[k], videoId: val[k].videoId || k })) : [];
         renderAdminVideos();
         updateKpis();
+        checkSyncLocalDataBanner();
+      }, err => {
+        console.error("Firebase videos fetch error:", err);
+        if (err.code === 'PERMISSION_DENIED' || (err.message && err.message.includes('permission_denied'))) {
+          if (firebasePermissionWarning) firebasePermissionWarning.style.display = 'block';
+        }
+        loadLocalData();
       });
 
       // 2. Listen for Categories
@@ -227,12 +384,16 @@
         renderAdminCategories();
         populateCategoryDropdown();
         updateKpis();
+      }, err => {
+        console.error("Firebase categories fetch error:", err);
       });
 
       // 3. Listen for Settings
       db.ref('settings').on('value', snapshot => {
         adminSettings = snapshot.val() || window.RK_FIREBASE.INITIAL_SITE_SETTINGS;
         populateSettings(adminSettings);
+      }, err => {
+        console.error("Firebase settings fetch error:", err);
       });
 
       updateFirebaseBadge();
@@ -277,23 +438,68 @@
 
   // Clear All Videos
   if (clearAllVideosBtn) {
-    clearAllVideosBtn.addEventListener('click', () => {
-      if (confirm("আপনি কি নিশ্চিত সমস্ত ভিডিও মুছে ডাটাবেস সম্পূর্ণ খালি করতে চান?")) {
-        if (!isLocalMode && db) {
-          db.ref('videos').set({})
-            .then(() => {
-              showToast("সকল ভিডিও মুছে ফেলা হয়েছে!");
-            })
-            .catch(err => showToast("ত্রুটি: " + err.message));
-        } else {
-          adminVideos = [];
-          localStorage.setItem('rk_local_videos', '[]');
-          renderAdminVideos();
-          updateKpis();
-          showToast("সকল ভিডিও মুছে ফেলা হয়েছে!");
-        }
-      }
+    clearAllVideosBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      promptClearAllVideos();
     });
+  }
+
+  if (confirmClearAllBtn) {
+    confirmClearAllBtn.addEventListener('click', () => {
+      executeClearAllVideos();
+    });
+  }
+
+  if (cancelClearAllBtn) {
+    cancelClearAllBtn.addEventListener('click', () => {
+      closeClearAllModal();
+    });
+  }
+
+  function promptClearAllVideos() {
+    if (confirmClearAllModalBackdrop) {
+      confirmClearAllModalBackdrop.classList.add('open');
+    } else {
+      executeClearAllVideos();
+    }
+  }
+
+  function closeClearAllModal() {
+    if (confirmClearAllModalBackdrop) {
+      confirmClearAllModalBackdrop.classList.remove('open');
+    }
+  }
+
+  async function executeClearAllVideos() {
+    closeClearAllModal();
+
+    if (window.RK_INDEXED_DB) {
+      try {
+        for (const v of adminVideos) {
+          const id = v.videoId || v.id;
+          if (id) await window.RK_INDEXED_DB.deleteVideoBlob(id);
+        }
+      } catch (e) {}
+    }
+
+    adminVideos = [];
+    try {
+      localStorage.setItem('rk_local_videos', '[]');
+      localStorage.setItem('rk_last_updated', Date.now().toString());
+    } catch (e) {}
+
+    renderAdminVideos();
+    updateKpis();
+
+    if (db) {
+      db.ref('videos').set({}).catch(err => console.warn("Firebase clear videos notice:", err));
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('rk_videos_updated', { detail: { action: 'clearAll' } }));
+    } catch (e) {}
+
+    showToast("সকল ভিডিও সফলভাবে মুছে ডাটাবেস খালি করা হয়েছে!");
   }
 
   // ==========================================
@@ -331,9 +537,11 @@
 
     adminCategoriesList.querySelectorAll('.delete-cat-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const row = e.target.closest('.item-row');
         const catId = row.getAttribute('data-id');
-        deleteCategory(catId);
+        promptDeleteCategory(catId);
       });
     });
   }
@@ -373,22 +581,61 @@
     });
   }
 
-  // Delete Category
-  function deleteCategory(catId) {
-    if (confirm("আপনি কি এই ক্যাটাগরিটি মুছে ফেলতে চান?")) {
-      if (!isLocalMode && db) {
-        db.ref(`categories/${catId}`).remove()
-          .then(() => showToast("ক্যাটাগরি মুছে ফেলা হয়েছে!"))
-          .catch(err => showToast("ত্রুটি: " + err.message));
-      } else {
-        adminCategories = adminCategories.filter(c => c.id !== catId);
-        localStorage.setItem('rk_local_categories', JSON.stringify(adminCategories));
-        renderAdminCategories();
-        populateCategoryDropdown();
-        updateKpis();
-        showToast("ক্যাটাগরি মুছে ফেলা হয়েছে!");
-      }
+  // Delete Category Prompt & Execution
+  function promptDeleteCategory(catId) {
+    if (!catId) return;
+    catToDeleteId = catId;
+    const cat = adminCategories.find(c => (c.id || c.name) === catId);
+    if (confirmDeleteCatName) {
+      confirmDeleteCatName.textContent = cat ? `"${cat.name}"` : 'এই ক্যাটাগরি';
     }
+    if (confirmDeleteCatModalBackdrop) {
+      confirmDeleteCatModalBackdrop.classList.add('open');
+    } else {
+      executeDeleteCategory(catId);
+    }
+  }
+
+  function closeDeleteCatModal() {
+    catToDeleteId = null;
+    if (confirmDeleteCatModalBackdrop) {
+      confirmDeleteCatModalBackdrop.classList.remove('open');
+    }
+  }
+
+  if (confirmDeleteCatBtn) {
+    confirmDeleteCatBtn.addEventListener('click', () => {
+      if (catToDeleteId) {
+        executeDeleteCategory(catToDeleteId);
+      }
+    });
+  }
+
+  if (cancelDeleteCatBtn) {
+    cancelDeleteCatBtn.addEventListener('click', () => {
+      closeDeleteCatModal();
+    });
+  }
+
+  function executeDeleteCategory(catId) {
+    if (!catId) return;
+    closeDeleteCatModal();
+
+    adminCategories = adminCategories.filter(c => (c.id || c.name) !== catId);
+    try {
+      localStorage.setItem('rk_local_categories', JSON.stringify(adminCategories));
+      localStorage.setItem('rk_last_updated', Date.now().toString());
+    } catch (e) {}
+
+    renderAdminCategories();
+    populateCategoryDropdown();
+    updateKpis();
+
+    if (db) {
+      db.ref(`categories/${catId}`).remove().catch(err => console.warn("Firebase category remove notice:", err));
+    }
+
+    showToast("ক্যাটাগরি মুছে ফেলা হয়েছে!");
   }
 
   // Populate Category options inside Video Modal
@@ -488,12 +735,48 @@
       }
 
       if (deleteBtn) {
-        deleteBtn.addEventListener('click', () => {
-          if (confirm("আপনি কি নিশ্চিত এই ভিডিওটি মুছে ফেলতে চান?")) {
-            deleteVideo(vid);
-          }
+        deleteBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          promptDeleteVideo(vid);
         });
       }
+    });
+  }
+
+  function promptDeleteVideo(videoId) {
+    if (!videoId) return;
+    videoToDeleteId = videoId;
+    const found = adminVideos.find(v => (v.videoId || v.id) === videoId);
+    const title = found && found.title ? found.title : 'এই ভিডিওটি';
+    if (confirmDeleteVideoTitle) {
+      confirmDeleteVideoTitle.textContent = title;
+    }
+    if (confirmDeleteModalBackdrop) {
+      confirmDeleteModalBackdrop.classList.add('open');
+    } else {
+      executeDeleteVideo(videoId);
+    }
+  }
+
+  function closeDeleteVideoModal() {
+    videoToDeleteId = null;
+    if (confirmDeleteModalBackdrop) {
+      confirmDeleteModalBackdrop.classList.remove('open');
+    }
+  }
+
+  if (confirmDeleteVideoBtn) {
+    confirmDeleteVideoBtn.addEventListener('click', () => {
+      if (videoToDeleteId) {
+        executeDeleteVideo(videoToDeleteId);
+      }
+    });
+  }
+
+  if (cancelDeleteVideoBtn) {
+    cancelDeleteVideoBtn.addEventListener('click', () => {
+      closeDeleteVideoModal();
     });
   }
 
@@ -503,7 +786,7 @@
         .then(() => showToast(`ভিডিও ${active ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে`))
         .catch(err => showToast("ত্রুটি: " + err.message));
     } else {
-      const idx = adminVideos.findIndex(v => v.videoId === videoId);
+      const idx = adminVideos.findIndex(v => (v.videoId || v.id) === videoId);
       if (idx !== -1) {
         adminVideos[idx].active = active;
         localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
@@ -513,26 +796,60 @@
     }
   }
 
-  async function deleteVideo(videoId) {
+  async function executeDeleteVideo(videoId) {
+    if (!videoId) return;
+    const vid = videoId;
+    closeDeleteVideoModal();
+
+    // 1. Identify target video in array
+    const targetVideo = adminVideos.find(v => (v.videoId || v.id) === vid);
+    const firebaseKey = (targetVideo && (targetVideo.id || targetVideo.videoId)) || vid;
+
+    // 2. Delete file blob from IndexedDB if stored
     if (window.RK_INDEXED_DB) {
       try {
-        await window.RK_INDEXED_DB.deleteVideoBlob(videoId);
-      } catch (e) {}
+        await window.RK_INDEXED_DB.deleteVideoBlob(vid);
+        if (firebaseKey !== vid) {
+          await window.RK_INDEXED_DB.deleteVideoBlob(firebaseKey);
+        }
+      } catch (idbErr) {
+        console.warn("IndexedDB delete notice:", idbErr);
+      }
     }
 
-    if (!isLocalMode && db) {
-      db.ref(`videos/${videoId}`).remove()
-        .then(() => showToast("ভিডিও মুছে ফেলা হয়েছে"))
-        .catch(err => showToast("ত্রুটি: " + err.message));
-    } else {
-      adminVideos = adminVideos.filter(v => v.videoId !== videoId);
-      try {
-        localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
-      } catch (e) {}
-      renderAdminVideos();
-      updateKpis();
-      showToast("ভিডিও মুছে ফেলা হয়েছে");
+    // 3. Immediately remove from in-memory adminVideos
+    adminVideos = adminVideos.filter(v => (v.videoId || v.id) !== vid && (v.videoId || v.id) !== firebaseKey);
+
+    // 4. Immediately persist to localStorage
+    try {
+      localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
+      localStorage.setItem('rk_last_updated', Date.now().toString());
+    } catch (storageErr) {
+      console.warn("LocalStorage save warning:", storageErr);
     }
+
+    // 5. Instantly re-render Admin UI & update KPIs (zero lag!)
+    renderAdminVideos();
+    updateKpis();
+
+    // 6. Delete from Firebase if database is connected
+    if (db) {
+      db.ref(`videos/${firebaseKey}`).remove().catch(err => {
+        console.warn("Firebase video remove notice:", err);
+      });
+      if (targetVideo && targetVideo.videoId && targetVideo.videoId !== firebaseKey) {
+        db.ref(`videos/${targetVideo.videoId}`).remove().catch(() => {});
+      }
+    }
+
+    // 7. Dispatch custom events for real-time synchronization with homepage
+    try {
+      window.dispatchEvent(new CustomEvent('rk_videos_updated', { 
+        detail: { action: 'delete', videoId: vid } 
+      }));
+    } catch (e) {}
+
+    showToast("ভিডিও সফলভাবে মুছে ফেলা হয়েছে!");
   }
 
   // Format seconds to mm:ss
@@ -609,13 +926,25 @@
         e.preventDefault();
         videoDropZone.classList.remove('dragover');
         if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-          handleSelectedVideoFile(e.dataTransfer.files[0]);
+          if (e.dataTransfer.files.length > 1) {
+            closeVideoModal();
+            openBulkVideoModal();
+            handleBulkSelectedFiles(e.dataTransfer.files);
+          } else {
+            handleSelectedVideoFile(e.dataTransfer.files[0]);
+          }
         }
       });
 
       formVideoFileInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
-          handleSelectedVideoFile(e.target.files[0]);
+          if (e.target.files.length > 1) {
+            closeVideoModal();
+            openBulkVideoModal();
+            handleBulkSelectedFiles(e.target.files);
+          } else {
+            handleSelectedVideoFile(e.target.files[0]);
+          }
         }
       });
     }
@@ -882,6 +1211,591 @@
   }
 
   // ==========================================
+  // BULK / MULTIPLE VIDEOS MANAGEMENT ENGINE
+  // ==========================================
+
+  function populateBulkCategories() {
+    let cats = [];
+    if (adminCategories && adminCategories.length > 0) {
+      cats = adminCategories.map(c => c.name);
+    } else {
+      cats = ['General', 'মুভি', 'নাটক', 'গান', 'ফান', 'ট্রেন্ডিং'];
+    }
+
+    const optionsHtml = cats.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
+
+    if (bulkFilesCategory) {
+      bulkFilesCategory.innerHTML = optionsHtml;
+    }
+    if (bulkUrlsCategory) {
+      bulkUrlsCategory.innerHTML = optionsHtml;
+    }
+  }
+
+  function setBulkTab(tab) {
+    activeBulkTab = tab;
+    if (tab === 'files') {
+      if (bulkTabFiles) bulkTabFiles.classList.add('active');
+      if (bulkTabUrls) bulkTabUrls.classList.remove('active');
+      if (bulkFilesSection) bulkFilesSection.style.display = 'block';
+      if (bulkUrlsSection) bulkUrlsSection.style.display = 'none';
+    } else {
+      if (bulkTabFiles) bulkTabFiles.classList.remove('active');
+      if (bulkTabUrls) bulkTabUrls.classList.add('active');
+      if (bulkFilesSection) bulkFilesSection.style.display = 'none';
+      if (bulkUrlsSection) bulkUrlsSection.style.display = 'block';
+      parseAndCountBulkUrls();
+    }
+  }
+
+  function openBulkVideoModal() {
+    if (!bulkVideoModalBackdrop) return;
+    if (videoModalBackdrop) videoModalBackdrop.classList.remove('open');
+
+    populateBulkCategories();
+    if (!isBulkProcessing) {
+      setBulkTab(activeBulkTab || 'files');
+      if (bulkFilesProgressContainer) bulkFilesProgressContainer.style.display = 'none';
+      if (bulkUrlsProgressContainer) bulkUrlsProgressContainer.style.display = 'none';
+    }
+    bulkVideoModalBackdrop.classList.add('open');
+  }
+
+  function closeBulkVideoModal() {
+    if (isBulkProcessing) {
+      if (!confirm("ভিডিও প্রক্রিয়া চলছে। আপনি কি সত্যিই বন্ধ করতে চান?")) return;
+    }
+    if (bulkVideoModalBackdrop) bulkVideoModalBackdrop.classList.remove('open');
+    if (!isBulkProcessing) {
+      clearBulkQueue();
+    }
+  }
+
+  function clearBulkQueue() {
+    bulkQueueFiles = [];
+    if (bulkVideoFilesInput) bulkVideoFilesInput.value = '';
+    if (bulkQueueContainer) bulkQueueContainer.style.display = 'none';
+    if (bulkQueueList) bulkQueueList.innerHTML = '';
+    if (bulkQueueCount) bulkQueueCount.textContent = '0';
+    if (saveBulkFilesCount) saveBulkFilesCount.textContent = '0';
+    if (saveBulkFilesBtn) saveBulkFilesBtn.disabled = true;
+    if (bulkFilesProgressContainer) bulkFilesProgressContainer.style.display = 'none';
+  }
+
+  // Extract duration and auto-capture thumbnail frame from a Video File
+  function extractVideoMetadata(file) {
+    return new Promise((resolve) => {
+      try {
+        const url = URL.createObjectURL(file);
+        const tempVideo = document.createElement('video');
+        tempVideo.preload = 'metadata';
+        tempVideo.muted = true;
+        tempVideo.playsInline = true;
+        tempVideo.src = url;
+
+        let resolved = false;
+        const done = (duration, thumbUrl) => {
+          if (resolved) return;
+          resolved = true;
+          URL.revokeObjectURL(url);
+          resolve({ duration: duration || '03:30', thumbUrl: thumbUrl || '' });
+        };
+
+        const timer = setTimeout(() => {
+          done('03:30', '');
+        }, 3500);
+
+        tempVideo.addEventListener('loadeddata', () => {
+          try {
+            tempVideo.currentTime = Math.min(1.0, (tempVideo.duration || 2) / 2);
+          } catch (e) {
+            done('03:30', '');
+          }
+        });
+
+        tempVideo.addEventListener('seeked', () => {
+          clearTimeout(timer);
+          let thumb = '';
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.min(tempVideo.videoWidth || 480, 480);
+            canvas.height = Math.min(tempVideo.videoHeight || 270, 270);
+            if (canvas.width > 0 && canvas.height > 0) {
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+              thumb = canvas.toDataURL('image/jpeg', 0.65);
+            }
+          } catch (e) {}
+          const dur = formatSecondsToDuration(tempVideo.duration);
+          done(dur, thumb);
+        });
+
+        tempVideo.addEventListener('error', () => {
+          clearTimeout(timer);
+          done('03:30', '');
+        });
+      } catch (e) {
+        resolve({ duration: '03:30', thumbUrl: '' });
+      }
+    });
+  }
+
+  function handleBulkSelectedFiles(files) {
+    if (!files || files.length === 0) return;
+
+    const newItems = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type && !file.type.startsWith('video/') && !file.name.match(/\.(mp4|webm|mkv|mov|avi|flv|wmv|m4v|ts|3gp)$/i)) {
+        continue;
+      }
+      const rawName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
+      const item = {
+        id: 'bulk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        file: file,
+        title: rawName || `ভিডিও ${bulkQueueFiles.length + i + 1}`,
+        sizeMb: (file.size / (1024 * 1024)).toFixed(1),
+        duration: '03:30',
+        thumbUrl: '',
+        isLoadingMeta: true
+      };
+      bulkQueueFiles.push(item);
+      newItems.push(item);
+    }
+
+    if (bulkQueueFiles.length === 0) {
+      showToast("কোনো সঠিক ভিডিও ফাইল পাওয়া যায়নি!");
+      return;
+    }
+
+    renderBulkQueueList();
+    if (bulkQueueContainer) bulkQueueContainer.style.display = 'block';
+    if (saveBulkFilesBtn) saveBulkFilesBtn.disabled = false;
+
+    // Asynchronously extract duration and frame snapshot for each video
+    newItems.forEach(item => {
+      extractVideoMetadata(item.file).then(meta => {
+        item.duration = meta.duration;
+        item.thumbUrl = meta.thumbUrl;
+        item.isLoadingMeta = false;
+        updateBulkQueueItemUI(item.id);
+      });
+    });
+  }
+
+  function updateBulkQueueItemUI(itemId) {
+    const item = bulkQueueFiles.find(x => x.id === itemId);
+    if (!item) return;
+    const cardEl = document.querySelector(`.bulk-queue-item[data-id="${itemId}"]`);
+    if (!cardEl) return;
+
+    const thumbWrap = cardEl.querySelector('.bulk-queue-item-thumb');
+    if (thumbWrap) {
+      if (item.thumbUrl) {
+        thumbWrap.innerHTML = `<img src="${item.thumbUrl}" alt="" />`;
+      } else {
+        thumbWrap.innerHTML = `<span>▶</span>`;
+      }
+    }
+    const metaDur = cardEl.querySelector('.item-dur-badge');
+    if (metaDur) {
+      metaDur.textContent = `⏱ ${item.duration}`;
+    }
+  }
+
+  function renderBulkQueueList() {
+    if (!bulkQueueList) return;
+    if (bulkQueueCount) bulkQueueCount.textContent = bulkQueueFiles.length.toString();
+    if (saveBulkFilesCount) saveBulkFilesCount.textContent = bulkQueueFiles.length.toString();
+
+    if (bulkQueueFiles.length === 0) {
+      if (bulkQueueContainer) bulkQueueContainer.style.display = 'none';
+      if (saveBulkFilesBtn) saveBulkFilesBtn.disabled = true;
+      bulkQueueList.innerHTML = '';
+      return;
+    }
+
+    bulkQueueList.innerHTML = bulkQueueFiles.map(item => `
+      <div class="bulk-queue-item" data-id="${item.id}">
+        <div class="bulk-queue-item-thumb">
+          ${item.thumbUrl 
+            ? `<img src="${item.thumbUrl}" alt="" />`
+            : `<span>${item.isLoadingMeta ? '⏳' : '▶'}</span>`
+          }
+        </div>
+        <div class="bulk-queue-item-body">
+          <input 
+            type="text" 
+            class="bulk-queue-item-title-input" 
+            value="${escapeHtml(item.title)}" 
+            placeholder="ভিডিওর শিরোনাম লিখুন..." 
+            title="শিরোনাম পরিবর্তন করতে পারেন"
+          />
+          <div class="bulk-queue-item-meta">
+            <span>💾 ${item.sizeMb} MB</span>
+            <span class="item-dur-badge">⏱ ${escapeHtml(item.duration)}</span>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">${escapeHtml(item.file.name)}</span>
+          </div>
+        </div>
+        <button type="button" class="btn-danger remove-bulk-item-btn" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px;" title="তালিকা থেকে বাদ দিন">
+          ✕
+        </button>
+      </div>
+    `).join('');
+
+    // Attach event listeners for each item in queue
+    bulkQueueList.querySelectorAll('.bulk-queue-item').forEach(card => {
+      const id = card.getAttribute('data-id');
+      const titleInput = card.querySelector('.bulk-queue-item-title-input');
+      const removeBtn = card.querySelector('.remove-bulk-item-btn');
+
+      if (titleInput) {
+        titleInput.addEventListener('input', (e) => {
+          const target = bulkQueueFiles.find(x => x.id === id);
+          if (target) target.title = e.target.value;
+        });
+      }
+
+      if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+          bulkQueueFiles = bulkQueueFiles.filter(x => x.id !== id);
+          renderBulkQueueList();
+        });
+      }
+    });
+  }
+
+  // Save all queued video files into IndexedDB & Firebase/LocalStorage
+  async function processAndSaveBulkFiles() {
+    if (bulkQueueFiles.length === 0) {
+      showToast("কোনো ভিডিও ফাইল নির্বাচিত নেই!");
+      return;
+    }
+
+    let batchCategory = (bulkFilesCustomCategory.value || '').trim();
+    if (!batchCategory) {
+      batchCategory = (bulkFilesCategory.value || '').trim();
+    }
+    if (!batchCategory) {
+      batchCategory = 'General';
+    }
+
+    isBulkProcessing = true;
+    if (saveBulkFilesBtn) saveBulkFilesBtn.disabled = true;
+    if (cancelBulkFilesBtn) cancelBulkFilesBtn.disabled = true;
+    if (bulkFilesProgressContainer) bulkFilesProgressContainer.style.display = 'block';
+
+    const total = bulkQueueFiles.length;
+    let savedCount = 0;
+
+    for (let i = 0; i < total; i++) {
+      const item = bulkQueueFiles[i];
+      const vid = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+      if (bulkFilesProgressStatus) {
+        bulkFilesProgressStatus.textContent = `সংরক্ষণ হচ্ছে... (${i + 1}/${total}) ${item.title}`;
+      }
+      const pct = Math.round(((i + 0.5) / total) * 100);
+      if (bulkFilesProgressPercent) bulkFilesProgressPercent.textContent = `${pct}%`;
+      if (bulkFilesProgressFill) bulkFilesProgressFill.style.width = `${pct}%`;
+
+      // 1. Save blob to IndexedDB
+      if (window.RK_INDEXED_DB) {
+        try {
+          await window.RK_INDEXED_DB.saveVideoBlob(vid, item.file);
+        } catch (e) {
+          console.warn("Bulk IndexedDB save error:", e);
+        }
+      }
+
+      // 2. Prepare video object (Thumbnail auto captured, NO thumbnail input required)
+      const videoData = {
+        videoId: vid,
+        title: (item.title || '').trim() || item.file.name,
+        videoUrl: 'indexeddb://' + vid,
+        thumbUrl: item.thumbUrl || '',
+        isUploadedFile: true,
+        fileName: item.file.name,
+        fileSize: item.file.size,
+        category: batchCategory,
+        duration: item.duration || '03:30',
+        active: true,
+        views: 0,
+        likes: 0,
+        createdAt: Date.now() + i
+      };
+
+      // 3. Save to Firebase or LocalStorage
+      if (!isLocalMode && db) {
+        try {
+          await db.ref(`videos/${vid}`).set(videoData);
+        } catch (fbErr) {
+          console.error("Firebase bulk video save error:", fbErr);
+        }
+      } else {
+        adminVideos.unshift(videoData);
+      }
+
+      savedCount++;
+      const donePct = Math.round(((i + 1) / total) * 100);
+      if (bulkFilesProgressPercent) bulkFilesProgressPercent.textContent = `${donePct}%`;
+      if (bulkFilesProgressFill) bulkFilesProgressFill.style.width = `${donePct}%`;
+    }
+
+    if (isLocalMode || !db) {
+      try {
+        localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
+      } catch (storageErr) {
+        console.warn("Storage warning:", storageErr);
+      }
+      renderAdminVideos();
+      updateKpis();
+    }
+
+    isBulkProcessing = false;
+    if (cancelBulkFilesBtn) cancelBulkFilesBtn.disabled = false;
+    showToast(`🎉 একসাথে ${savedCount} টি ভিডিও সফলভাবে আপলোড ও যুক্ত হয়েছে!`);
+    clearBulkQueue();
+    closeBulkVideoModal();
+  }
+
+  // Parse lines from URLs textarea and count valid ones
+  function parseAndCountBulkUrls() {
+    const text = (bulkUrlsTextarea ? bulkUrlsTextarea.value : '') || '';
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const validCount = lines.filter(l => l.includes('http://') || l.includes('https://') || l.includes('dropbox') || l.includes('drive.google')).length;
+
+    if (bulkUrlsCountBadge) {
+      bulkUrlsCountBadge.textContent = `সনাক্ত লিংক: ${validCount} টি`;
+      bulkUrlsCountBadge.style.color = validCount > 0 ? '#16a34a' : 'var(--color-primary)';
+    }
+    if (saveBulkUrlsBtn) {
+      saveBulkUrlsBtn.disabled = validCount === 0;
+    }
+    return lines;
+  }
+
+  // Save all URLs pasted in textarea
+  async function processAndSaveBulkUrls() {
+    const lines = parseAndCountBulkUrls();
+    if (lines.length === 0) {
+      showToast("অনুগ্রহ করে অন্তত একটি ভিডিও লিংক পেস্ট করুন!");
+      return;
+    }
+
+    let batchCategory = (bulkUrlsCustomCategory.value || '').trim();
+    if (!batchCategory) {
+      batchCategory = (bulkUrlsCategory.value || '').trim();
+    }
+    if (!batchCategory) {
+      batchCategory = 'General';
+    }
+
+    isBulkProcessing = true;
+    if (saveBulkUrlsBtn) saveBulkUrlsBtn.disabled = true;
+    if (cancelBulkUrlsBtn) cancelBulkUrlsBtn.disabled = true;
+    if (bulkUrlsProgressContainer) bulkUrlsProgressContainer.style.display = 'block';
+
+    const validItems = [];
+    lines.forEach((line, idx) => {
+      let rawUrl = '';
+      let title = '';
+
+      if (line.includes('|')) {
+        const parts = line.split('|');
+        title = parts[0].trim();
+        rawUrl = parts.slice(1).join('|').trim();
+      } else {
+        rawUrl = line.trim();
+      }
+
+      if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        if (rawUrl.includes('dropbox.com') || rawUrl.includes('drive.google.com')) {
+          rawUrl = 'https://' + rawUrl;
+        } else {
+          return; // skip non-url lines
+        }
+      }
+
+      const formattedUrl = window.RK_FIREBASE && window.RK_FIREBASE.formatDirectVideoUrl
+        ? window.RK_FIREBASE.formatDirectVideoUrl(rawUrl)
+        : rawUrl;
+
+      if (!title) {
+        // Derive title from url or fallback
+        try {
+          const parsed = new URL(formattedUrl);
+          const segs = parsed.pathname.split('/').filter(Boolean);
+          const last = segs[segs.length - 1] || '';
+          title = decodeURIComponent(last.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim()) || `ভিডিও ${idx + 1}`;
+        } catch (e) {
+          title = `ভিডিও ${idx + 1}`;
+        }
+      }
+
+      validItems.push({ title, url: formattedUrl });
+    });
+
+    if (validItems.length === 0) {
+      showToast("কোনো সঠিক ভিডিও লিংক পাওয়া যায়নি!");
+      isBulkProcessing = false;
+      if (saveBulkUrlsBtn) saveBulkUrlsBtn.disabled = false;
+      if (cancelBulkUrlsBtn) cancelBulkUrlsBtn.disabled = false;
+      if (bulkUrlsProgressContainer) bulkUrlsProgressContainer.style.display = 'none';
+      return;
+    }
+
+    const total = validItems.length;
+    let savedCount = 0;
+
+    for (let i = 0; i < total; i++) {
+      const item = validItems[i];
+      const vid = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+      if (bulkUrlsProgressStatus) {
+        bulkUrlsProgressStatus.textContent = `লিংক সেভ হচ্ছে... (${i + 1}/${total}) ${item.title}`;
+      }
+      const pct = Math.round(((i + 1) / total) * 100);
+      if (bulkUrlsProgressPercent) bulkUrlsProgressPercent.textContent = `${pct}%`;
+      if (bulkUrlsProgressFill) bulkUrlsProgressFill.style.width = `${pct}%`;
+
+      const videoData = {
+        videoId: vid,
+        title: item.title,
+        videoUrl: item.url,
+        thumbUrl: '', // Auto-rendered as clean poster or frame on client
+        isUploadedFile: false,
+        category: batchCategory,
+        duration: '03:30',
+        active: true,
+        views: 0,
+        likes: 0,
+        createdAt: Date.now() + i
+      };
+
+      if (!isLocalMode && db) {
+        try {
+          await db.ref(`videos/${vid}`).set(videoData);
+        } catch (fbErr) {
+          console.error("Firebase bulk url save error:", fbErr);
+        }
+      } else {
+        adminVideos.unshift(videoData);
+      }
+
+      savedCount++;
+    }
+
+    if (isLocalMode || !db) {
+      try {
+        localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
+      } catch (storageErr) {
+        console.warn("Storage warning:", storageErr);
+      }
+      renderAdminVideos();
+      updateKpis();
+    }
+
+    isBulkProcessing = false;
+    if (saveBulkUrlsBtn) saveBulkUrlsBtn.disabled = false;
+    if (cancelBulkUrlsBtn) cancelBulkUrlsBtn.disabled = false;
+    if (bulkUrlsTextarea) bulkUrlsTextarea.value = '';
+    parseAndCountBulkUrls();
+    showToast(`🎉 ${savedCount} টি ভিডিও লিংক সফলভাবে যুক্ত হয়েছে!`);
+    closeBulkVideoModal();
+  }
+
+  function setupBulkVideoHandlers() {
+    // Mode Switcher Tabs
+    if (bulkTabFiles) {
+      bulkTabFiles.addEventListener('click', () => setBulkTab('files'));
+    }
+    if (bulkTabUrls) {
+      bulkTabUrls.addEventListener('click', () => setBulkTab('urls'));
+    }
+
+    // Modal open / close triggers
+    if (addMultipleVideosBtn) {
+      addMultipleVideosBtn.addEventListener('click', openBulkVideoModal);
+    }
+    if (switchToBulkModalBtn) {
+      switchToBulkModalBtn.addEventListener('click', () => {
+        closeVideoModal();
+        openBulkVideoModal();
+      });
+    }
+    if (closeBulkVideoModalBtn) {
+      closeBulkVideoModalBtn.addEventListener('click', closeBulkVideoModal);
+    }
+    if (cancelBulkFilesBtn) {
+      cancelBulkFilesBtn.addEventListener('click', closeBulkVideoModal);
+    }
+    if (cancelBulkUrlsBtn) {
+      cancelBulkUrlsBtn.addEventListener('click', closeBulkVideoModal);
+    }
+
+    // Multi-File Dropzone & File Input
+    if (bulkVideoDropZone && bulkVideoFilesInput) {
+      bulkVideoDropZone.addEventListener('click', () => {
+        bulkVideoFilesInput.click();
+      });
+
+      bulkVideoDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        bulkVideoDropZone.classList.add('dragover');
+      });
+
+      bulkVideoDropZone.addEventListener('dragleave', () => {
+        bulkVideoDropZone.classList.remove('dragover');
+      });
+
+      bulkVideoDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        bulkVideoDropZone.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleBulkSelectedFiles(e.dataTransfer.files);
+        }
+      });
+
+      bulkVideoFilesInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleBulkSelectedFiles(e.target.files);
+        }
+      });
+    }
+
+    if (bulkClearQueueBtn) {
+      bulkClearQueueBtn.addEventListener('click', clearBulkQueue);
+    }
+
+    if (saveBulkFilesBtn) {
+      saveBulkFilesBtn.addEventListener('click', processAndSaveBulkFiles);
+    }
+
+    // URLs Mode Handlers
+    if (bulkUrlsTextarea) {
+      bulkUrlsTextarea.addEventListener('input', parseAndCountBulkUrls);
+    }
+
+    if (bulkUrlsSampleBtn) {
+      bulkUrlsSampleBtn.addEventListener('click', () => {
+        if (bulkUrlsTextarea) {
+          bulkUrlsTextarea.value = [
+            'বিগ বাক বানি HD ট্রেলার | https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            'এলিফ্যান্টস ড্রিম 4K সিনেমা | https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+            'ফর বিগ কসমস ফিল্ম | https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+          ].join('\n');
+          parseAndCountBulkUrls();
+        }
+      });
+    }
+
+    if (saveBulkUrlsBtn) {
+      saveBulkUrlsBtn.addEventListener('click', processAndSaveBulkUrls);
+    }
+  }
+
+  // ==========================================
   // SETTINGS & ADSTERRA
   // ==========================================
   function populateSettings(s) {
@@ -902,6 +1816,16 @@
     if (adsterraBannerBottom) adsterraBannerBottom.value = s.adsterraBannerBottom || '';
     if (adsterraPopunder) adsterraPopunder.value = s.adsterraPopunder || '';
     if (adsterraSocialBar) adsterraSocialBar.value = s.adsterraSocialBar || '';
+    if (adsterraSmartlink) adsterraSmartlink.value = s.adsterraSmartlink || '';
+    if (adsterraSmartlinkText) adsterraSmartlinkText.value = s.adsterraSmartlinkText || '⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক';
+    if (adsterraSmartlinkPlayer) adsterraSmartlinkPlayer.checked = s.adsterraSmartlinkPlayer !== false;
+    if (adsterraSmartlinkFloating) adsterraSmartlinkFloating.checked = s.adsterraSmartlinkFloating !== false;
+
+    if (adsterraMessageAdEnabled) adsterraMessageAdEnabled.checked = s.adsterraMessageAdEnabled !== false;
+    if (adsterraMessageAdCode) adsterraMessageAdCode.value = s.adsterraMessageAdCode || '';
+    if (adsterraMessageSender) adsterraMessageSender.value = s.adsterraMessageSender || '💬 (1) নতুন নোটিফিকেশন';
+    if (adsterraMessageText) adsterraMessageText.value = s.adsterraMessageText || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...';
+    if (adsterraMessageBtnText) adsterraMessageBtnText.value = s.adsterraMessageBtnText || 'ওপেন করুন ⚡';
   }
 
   if (settingPrimaryColorPicker && settingPrimaryColor) {
@@ -923,7 +1847,16 @@
         adsterraBannerTop: (adsterraBannerTop.value || '').trim(),
         adsterraBannerBottom: (adsterraBannerBottom.value || '').trim(),
         adsterraPopunder: (adsterraPopunder.value || '').trim(),
-        adsterraSocialBar: (adsterraSocialBar.value || '').trim()
+        adsterraSocialBar: (adsterraSocialBar.value || '').trim(),
+        adsterraSmartlink: (adsterraSmartlink ? adsterraSmartlink.value : '').trim(),
+        adsterraSmartlinkText: (adsterraSmartlinkText ? adsterraSmartlinkText.value : '').trim() || '⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক',
+        adsterraSmartlinkPlayer: adsterraSmartlinkPlayer ? adsterraSmartlinkPlayer.checked : true,
+        adsterraSmartlinkFloating: adsterraSmartlinkFloating ? adsterraSmartlinkFloating.checked : true,
+        adsterraMessageAdEnabled: adsterraMessageAdEnabled ? adsterraMessageAdEnabled.checked : true,
+        adsterraMessageAdCode: (adsterraMessageAdCode ? adsterraMessageAdCode.value : '').trim(),
+        adsterraMessageSender: (adsterraMessageSender ? adsterraMessageSender.value : '').trim() || '💬 (1) নতুন নোটিফিকেশন',
+        adsterraMessageText: (adsterraMessageText ? adsterraMessageText.value : '').trim() || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...',
+        adsterraMessageBtnText: (adsterraMessageBtnText ? adsterraMessageBtnText.value : '').trim() || 'ওপেন করুন ⚡'
       };
 
       if (!isLocalMode && db) {
@@ -985,8 +1918,9 @@
 
   function updateFirebaseBadge() {
     if (!firebaseStatusBadge) return;
+    const projId = (window.RK_FIREBASE && window.RK_FIREBASE.config && window.RK_FIREBASE.config.projectId) || 'rk-portfolio-66771';
     if (!isLocalMode && db) {
-      firebaseStatusBadge.textContent = '🟢 ফায়ারবেস সক্রিয় (Connected)';
+      firebaseStatusBadge.textContent = `🟢 ফায়ারবেস সক্রিয় (${projId})`;
       firebaseStatusBadge.style.backgroundColor = '#dcfce7';
       firebaseStatusBadge.style.color = '#15803d';
     } else {
@@ -999,6 +1933,8 @@
       const saved = localStorage.getItem('rk_firebase_config');
       if (saved && firebaseConfigInput && !firebaseConfigInput.value) {
         firebaseConfigInput.value = saved;
+      } else if (window.RK_FIREBASE && window.RK_FIREBASE.config && firebaseConfigInput && !firebaseConfigInput.value) {
+        firebaseConfigInput.value = JSON.stringify(window.RK_FIREBASE.config, null, 2);
       }
     } catch (e) {}
   }
@@ -1059,6 +1995,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
     setupDirectVideoHandlers();
+    setupBulkVideoHandlers();
     initAuth();
   });
 

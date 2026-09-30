@@ -12,16 +12,17 @@
  */
 
 // ============================================================================
-// ⚠️ PASTE YOUR FIREBASE CONFIGURATION HERE ⚠️
+// ⚠️ FIREBASE CONFIGURATION ⚠️
 // ============================================================================
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "YOUR_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAkh3Bk8XN30FYBDW4EMh5OC7CI6YTeP8Y",
+  authDomain: "rk-portfolio-66771.firebaseapp.com",
+  databaseURL: "https://rk-portfolio-66771-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "rk-portfolio-66771",
+  storageBucket: "rk-portfolio-66771.firebasestorage.app",
+  messagingSenderId: "379197461011",
+  appId: "1:379197461011:web:184fa1739ea45032dda5e6",
+  measurementId: "G-QZWTQE57WE"
 };
 // ============================================================================
 
@@ -51,7 +52,12 @@ const INITIAL_SITE_SETTINGS = {
   adsterraSmartlinkText: "⚡ হাই স্পিড ডাউনলোড / ফুল HD লিংক",
   adsterraSmartlinkPlayer: true,
   adsterraSmartlinkFloating: true,
-  adsterraEnabled: true
+  adsterraEnabled: true,
+  adsterraMessageAdEnabled: true,
+  adsterraMessageAdCode: "",
+  adsterraMessageSender: "💬 (1) নতুন নোটিফিকেশন",
+  adsterraMessageText: "🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...",
+  adsterraMessageBtnText: "ওপেন করুন ⚡"
 };
 
 // Safe Direct Video & Cloud Storage URL Formatter (Dropbox, Google Drive, Direct MP4/WebM)
@@ -160,6 +166,7 @@ const RK_INDEXED_DB = {
 let isFirebaseReady = false;
 let dbInstance = null;
 let authInstance = null;
+let analyticsInstance = null;
 let useLocalMode = false;
 
 function initFirebase() {
@@ -178,8 +185,9 @@ function initFirebase() {
     const savedConfig = localStorage.getItem('rk_firebase_config');
     if (savedConfig) {
       const parsed = JSON.parse(savedConfig);
-      if (isConfigured(parsed)) {
-        runtimeConfig = parsed;
+      // Only override if savedConfig is valid and user explicitly customized it
+      if (isConfigured(parsed) && parsed.apiKey && parsed.apiKey !== "YOUR_API_KEY") {
+        runtimeConfig = { ...runtimeConfig, ...parsed };
       }
     }
   } catch (e) {
@@ -193,10 +201,17 @@ function initFirebase() {
       }
       dbInstance = firebase.database();
       authInstance = firebase.auth();
+      if (typeof firebase.analytics === 'function' && runtimeConfig.measurementId) {
+        try {
+          analyticsInstance = firebase.analytics();
+        } catch (analyticsErr) {
+          console.warn("Firebase Analytics could not be initialized:", analyticsErr);
+        }
+      }
       isFirebaseReady = true;
       useLocalMode = false;
-      console.log("✅ Firebase Realtime Database connected successfully!");
-      return { ready: true, isLocal: false, db: dbInstance, auth: authInstance };
+      console.log("✅ Firebase Realtime Database connected successfully!", runtimeConfig.projectId);
+      return { ready: true, isLocal: false, db: dbInstance, auth: authInstance, analytics: analyticsInstance };
     } catch (err) {
       console.error("Firebase initialization failed:", err);
     }
@@ -235,5 +250,6 @@ window.RK_FIREBASE = {
   INITIAL_SITE_SETTINGS,
   getDb: () => dbInstance,
   getAuth: () => authInstance,
+  getAnalytics: () => analyticsInstance,
   isLocal: () => useLocalMode
 };

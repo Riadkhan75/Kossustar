@@ -16,7 +16,7 @@
   let activeVideo = null;
   let isLocalMode = false;
   let db = null;
-  let adsterraInjected = false;
+  const injectedScripts = new Set();
 
   // DOM Elements
   const videoGrid = document.getElementById('videoGrid');
@@ -32,6 +32,14 @@
   const footerBrand = document.getElementById('footerBrand');
   const adsterraTopSlot = document.getElementById('adsterraTopSlot');
   const adsterraBottomSlot = document.getElementById('adsterraBottomSlot');
+
+  // Adsterra Top Message Ad Elements
+  const topMessageAdBar = document.getElementById('topMessageAdBar');
+  const topMessageSender = document.getElementById('topMessageSender');
+  const topMessageBody = document.getElementById('topMessageBody');
+  const topMessageBtn = document.getElementById('topMessageBtn');
+  const topMessageBtnText = document.getElementById('topMessageBtnText');
+  const closeTopMessageBtn = document.getElementById('closeTopMessageBtn');
 
   // Player Elements
   const playerBackdrop = document.getElementById('playerModalBackdrop');
@@ -95,7 +103,7 @@
     return url;
   }
 
-  // Safely Render Adsterra Ad Snippets (executing script tags)
+  // Safely Render Adsterra Ad Snippets (executing script tags in isolated context to prevent document.write collisions)
   function renderAdSnippet(container, code) {
     if (!container) return;
     container.innerHTML = '';
@@ -106,28 +114,54 @@
     container.style.display = 'flex';
 
     try {
-      const temp = document.createElement('div');
-      temp.innerHTML = code;
-
-      Array.from(temp.childNodes).forEach(node => {
-        if (node.tagName === 'SCRIPT') {
-          const script = document.createElement('script');
-          Array.from(node.attributes).forEach(attr => {
-            script.setAttribute(attr.name, attr.value);
-          });
-          script.text = node.innerHTML;
-          container.appendChild(script);
-        } else {
-          container.appendChild(node.cloneNode(true));
-        }
-      });
+      // If code contains script tags (standard Adsterra atOptions + invoke.js)
+      if (code.includes('<script')) {
+        const iframe = document.createElement('iframe');
+        iframe.style.border = 'none';
+        iframe.style.overflow = 'hidden';
+        iframe.style.width = '100%';
+        iframe.style.minHeight = '70px';
+        iframe.style.display = 'block';
+        iframe.scrolling = 'no';
+        iframe.setAttribute('loading', 'lazy');
+        iframe.srcdoc = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                html, body {
+                  margin: 0;
+                  padding: 0;
+                  background: transparent;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100%;
+                }
+              </style>
+            </head>
+            <body>
+              ${code}
+            </body>
+          </html>
+        `;
+        container.appendChild(iframe);
+      } else {
+        container.innerHTML = code;
+      }
     } catch (e) {
       console.warn("Error rendering Adsterra snippet:", e);
     }
   }
 
-  function injectGlobalAdScript(code) {
-    if (!code || !code.trim() || adsterraInjected) return;
+  // Safely Inject Global Adsterra Scripts (Popunder, Social Bar, In-Page Push)
+  function injectGlobalAdScript(code, scriptId = '') {
+    if (!code || !code.trim()) return;
+    const key = scriptId || code.trim().substring(0, 80);
+    if (injectedScripts.has(key)) return;
+    injectedScripts.add(key);
+
     try {
       const temp = document.createElement('div');
       temp.innerHTML = code;
@@ -139,10 +173,14 @@
             script.setAttribute(attr.name, attr.value);
           });
           script.text = node.innerHTML;
-          document.body.appendChild(script);
+          if (script.src && !script.hasAttribute('async')) {
+            script.async = true;
+          }
+          document.head.appendChild(script);
+        } else if (node.nodeType === 1) {
+          document.body.appendChild(node.cloneNode(true));
         }
       });
-      adsterraInjected = true;
     } catch (e) {
       console.warn("Error injecting global Adsterra script:", e);
     }
@@ -322,14 +360,36 @@
       }
 
       if (settings.adsterraPopunder) {
-        injectGlobalAdScript(settings.adsterraPopunder);
+        injectGlobalAdScript(settings.adsterraPopunder, 'popunder');
       }
       if (settings.adsterraSocialBar) {
-        injectGlobalAdScript(settings.adsterraSocialBar);
+        injectGlobalAdScript(settings.adsterraSocialBar, 'socialbar');
+      }
+      if (settings.adsterraMessageAdCode) {
+        injectGlobalAdScript(settings.adsterraMessageAdCode, 'messageadcode');
+      }
+
+      // Adsterra Top Message-Style Notification Bar
+      const messageAdEnabled = settings.adsterraMessageAdEnabled !== false;
+      const isMsgClosed = sessionStorage.getItem('rk_closed_msg_ad') === 'true';
+      if (messageAdEnabled && !isMsgClosed && topMessageAdBar) {
+        if (topMessageSender) topMessageSender.textContent = settings.adsterraMessageSender || '💬 (1) নতুন নোটিফিকেশন';
+        if (topMessageBody) topMessageBody.textContent = settings.adsterraMessageText || '🔥 আনকাট ফুল HD ভিডিও দেখতে ও দ্রুত ডাউনলোড করতে এখানে চাপুন...';
+        if (topMessageBtnText) topMessageBtnText.textContent = settings.adsterraMessageBtnText || 'ওপেন করুন ⚡';
+        const targetUrl = settings.adsterraSmartlink || '#';
+        if (topMessageBtn) {
+          topMessageBtn.href = targetUrl;
+          topMessageBtn.target = '_blank';
+          topMessageBtn.rel = 'noopener noreferrer';
+        }
+        topMessageAdBar.style.display = 'block';
+      } else if (topMessageAdBar) {
+        topMessageAdBar.style.display = 'none';
       }
     } else {
       if (adsterraTopSlot) adsterraTopSlot.style.display = 'none';
       if (adsterraBottomSlot) adsterraBottomSlot.style.display = 'none';
+      if (topMessageAdBar) topMessageAdBar.style.display = 'none';
     }
   }
 
@@ -859,10 +919,33 @@
     });
   }
 
+  // Top Message Ad Events
+  function setupTopMessageAdEvents() {
+    if (closeTopMessageBtn) {
+      closeTopMessageBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (topMessageAdBar) topMessageAdBar.style.display = 'none';
+        sessionStorage.setItem('rk_closed_msg_ad', 'true');
+      });
+    }
+
+    if (topMessageAdBar) {
+      topMessageAdBar.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'closeTopMessageBtn' || e.target.closest('#closeTopMessageBtn'))) {
+          return;
+        }
+        if (topMessageBtn && topMessageBtn.href && topMessageBtn.href !== '#' && !topMessageBtn.href.endsWith('#')) {
+          window.open(topMessageBtn.href, '_blank', 'noopener,noreferrer');
+        }
+      });
+    }
+  }
+
   // Init App on DOM Loaded
   document.addEventListener('DOMContentLoaded', () => {
     preLoadSiteBranding();
     initTheme();
+    setupTopMessageAdEvents();
     setupCategories();
     setupSearch();
     setupMenuDrawer();
