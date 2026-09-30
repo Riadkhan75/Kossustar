@@ -244,6 +244,8 @@
             ...val[key],
             id: val[key].id || key
           }));
+          // Show newest added category first (at the top/front)
+          allCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         } else {
           allCategories = [];
         }
@@ -289,6 +291,7 @@
     try {
       const stored = localStorage.getItem('rk_local_categories');
       allCategories = stored ? JSON.parse(stored) : [];
+      allCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) {
       allCategories = [];
     }
@@ -393,14 +396,16 @@
     }
   }
 
-  // Render Category Chips Dynamically
+  // Render Category Chips Dynamically (Newest Added Category Shows at the Top/Front)
   function renderCategoryChips() {
     if (!categoryChipsContainer) return;
 
     let html = `<button class="category-chip ${currentCategory === 'All' ? 'active' : ''}" data-category="All">সব / All</button>`;
 
     if (allCategories && allCategories.length > 0) {
-      html += allCategories.map(cat => {
+      // Sort newest added category first (at the top/front right after All)
+      const sorted = [...allCategories].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      html += sorted.map(cat => {
         const catName = cat.name || cat;
         const isActive = currentCategory.toLowerCase() === catName.toLowerCase() ? 'active' : '';
         return `<button class="category-chip ${isActive}" data-category="${escapeHtml(catName)}">${escapeHtml(catName)}</button>`;

@@ -377,10 +377,11 @@
         loadLocalData();
       });
 
-      // 2. Listen for Categories
+      // 2. Listen for Categories (Sorted newest first so new category shows at top)
       db.ref('categories').on('value', snapshot => {
         const val = snapshot.val();
         adminCategories = val ? Object.keys(val).map(k => ({ ...val[k], id: val[k].id || k })) : [];
+        adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         renderAdminCategories();
         populateCategoryDropdown();
         updateKpis();
@@ -408,6 +409,7 @@
       adminVideos = v ? JSON.parse(v) : [];
       const c = localStorage.getItem('rk_local_categories');
       adminCategories = c ? JSON.parse(c) : [];
+      adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       const s = localStorage.getItem('rk_local_settings');
       adminSettings = s ? JSON.parse(s) : window.RK_FIREBASE.INITIAL_SITE_SETTINGS;
     } catch (e) {
@@ -517,6 +519,9 @@
       return;
     }
 
+    // Always sort newest category at the top
+    adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
     adminCategoriesList.innerHTML = adminCategories.map(cat => {
       return `
         <div class="item-row" data-id="${cat.id}">
@@ -546,7 +551,7 @@
     });
   }
 
-  // Add Category
+  // Add Category (Always adds at the top)
   if (addCategoryForm) {
     addCategoryForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -565,18 +570,19 @@
       if (!isLocalMode && db) {
         db.ref(`categories/${catId}`).set(newCat)
           .then(() => {
-            showToast("ক্যাটাগরি সফলভাবে যুক্ত হয়েছে!");
+            showToast("ক্যাটাগরি সফলভাবে যুক্ত হয়েছে এবং সবার উপরে দেখাচ্ছে!");
             newCategoryInput.value = '';
           })
           .catch(err => showToast("ত্রুটি: " + err.message));
       } else {
-        adminCategories.push(newCat);
+        adminCategories.unshift(newCat);
+        adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         localStorage.setItem('rk_local_categories', JSON.stringify(adminCategories));
         newCategoryInput.value = '';
         renderAdminCategories();
         populateCategoryDropdown();
         updateKpis();
-        showToast("ক্যাটাগরি সফলভাবে যুক্ত হয়েছে!");
+        showToast("ক্যাটাগরি সফলভাবে যুক্ত হয়েছে এবং সবার উপরে দেখাচ্ছে!");
       }
     });
   }
@@ -638,7 +644,7 @@
     showToast("ক্যাটাগরি মুছে ফেলা হয়েছে!");
   }
 
-  // Populate Category options inside Video Modal
+  // Populate Category options inside Video Modal (Newest Category at Top)
   function populateCategoryDropdown(selectedCategory = '') {
     if (!formCategory) return;
     formCategory.innerHTML = '';
@@ -650,6 +656,8 @@
       formCategory.appendChild(opt);
       return;
     }
+
+    adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     adminCategories.forEach(cat => {
       const opt = document.createElement('option');
@@ -1217,6 +1225,7 @@
   function populateBulkCategories() {
     let cats = [];
     if (adminCategories && adminCategories.length > 0) {
+      adminCategories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       cats = adminCategories.map(c => c.name);
     } else {
       cats = ['General', 'মুভি', 'নাটক', 'গান', 'ফান', 'ট্রেন্ডিং'];
