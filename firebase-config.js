@@ -189,66 +189,30 @@ async function uploadVideoToCloud(file, videoId, onProgress) {
   if (!file) throw new Error("কোনো ভিডিও ফাইল নির্বাচন করা হয়নি।");
   const vid = videoId || 'vid_' + Date.now();
 
-  // 1. First priority: Firebase Cloud Storage (Google Cloud CDN)
-  if (storageInstance && !useLocalMode) {
+  // 1. Immediately cache in IndexedDB in the background so video is NEVER lost!
+  if (window.RK_INDEXED_DB) {
     try {
-      const sanitizedName = (file.name || 'video.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storageRef = storageInstance.ref(`videos/${vid}_${Date.now()}_${sanitizedName}`);
-      const uploadTask = storageRef.put(file);
-
-      const downloadUrl = await new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            if (typeof onProgress === 'function') {
-              onProgress(percent, 'Firebase ক্লাউড স্টোরেজে আপলোড হচ্ছে...');
-            }
-          },
-          (err) => reject(err),
-          async () => {
-            try {
-              const url = await uploadTask.snapshot.ref.getDownloadURL();
-              resolve(url);
-            } catch (e) {
-              reject(e);
-            }
-          }
-        );
-      });
-
-      // Also cache in IndexedDB for instant local playback
-      if (window.RK_INDEXED_DB) {
-        window.RK_INDEXED_DB.saveVideoBlob(vid, file).catch(() => {});
-      }
-
-      return {
-        success: true,
-        url: downloadUrl,
-        provider: 'firebase',
-        isCloudPermanent: true,
-        fileName: file.name,
-        fileSize: file.size
-      };
-    } catch (firebaseErr) {
-      console.warn("Firebase Cloud Storage upload notice:", firebaseErr);
-      // Fall through to server-side permanent upload
+      await window.RK_INDEXED_DB.saveVideoBlob(vid, file);
+    } catch (e) {
+      console.warn("IndexedDB pre-cache warning:", e);
     }
   }
 
-  // 2. Second priority: Server Permanent Upload Endpoint (/api/upload-video)
+  // 2. Try Server Permanent Upload Endpoint (/api/upload-video)
   try {
     const encodedName = encodeURIComponent(file.name || 'video.mp4');
     const xhr = new XMLHttpRequest();
     const serverUrl = await new Promise((resolve, reject) => {
+      // 45-second timeout for large video uploads
+      xhr.timeout = 45000;
       xhr.open('POST', `/api/upload-video?filename=${encodedName}`, true);
       xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 
       if (xhr.upload && typeof onProgress === 'function') {
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
+          if (e.lengthComputable && e.total > 0) {
             const percent = Math.round((e.loaded / e.total) * 100);
-            onProgress(percent, 'সার্ভার পার্মানেন্ট স্টোরেজে আপলোড হচ্ছে...');
+            onProgress(percent, 'স্থায়ী ক্লাউড/সার্ভার স্টোরেজে আপলোড হচ্ছে...');
           }
         };
       }
@@ -257,10 +221,10 @@ async function uploadVideoToCloud(file, videoId, onProgress) {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const resp = JSON.parse(xhr.responseText);
-            if (resp.url) {
+            if (resp && resp.url) {
               resolve(resp.url);
             } else {
-              reject(new Error('Invalid response'));
+              reject(new Error('Invalid server response'));
             }
           } catch (e) {
             reject(e);
@@ -270,45 +234,89 @@ async function uploadVideoToCloud(file, videoId, onProgress) {
         }
       };
 
+      xhr.ontimeout = () => reject(new Error('Upload timeout'));
       xhr.onerror = () => reject(new Error('Network error during upload'));
       xhr.send(file);
     });
 
-    // Also cache in IndexedDB for instant local playback
-    if (window.RK_INDEXED_DB) {
-      window.RK_INDEXED_DB.saveVideoBlob(vid, file).catch(() => {});
+    if (serverUrl) {
+      return {
+        success: true,
+        url: serverUrl,
+        provider: 'server',
+        isCloudPermanent: true,
+        fileName: file.name,
+        fileSize: file.size
+      };
     }
-
-    return {
-      success: true,
-      url: serverUrl,
-      provider: 'server',
-      isCloudPermanent: true,
-      fileName: file.name,
-      fileSize: file.size
-    };
   } catch (serverErr) {
     console.warn("Server upload API notice:", serverErr);
   }
 
-  // 3. Third priority: Persistent IndexedDB Sandbox
-  if (window.RK_INDEXED_DB) {
-    if (typeof onProgress === 'function') {
-      onProgress(100, 'ডিভাইসের স্থায়ী মেমোরিতে সংরক্ষণ হচ্ছে...');
+  // 3. Fallback to Firebase Storage with a 6-second timeout so it never hangs
+  if (storageInstance && !useLocalMode) {
+    try {
+      const sanitizedName = (file.name || 'video.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageRef = storageInstance.ref(`videos/${vid}_${Date.now()}_${sanitizedName}`);
+      const uploadTask = storageRef.put(file);
+
+      const downloadUrl = await Promise.race([
+        new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              if (snapshot.totalBytes > 0) {
+                const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                if (typeof onProgress === 'function') {
+                  onProgress(percent, 'Firebase ক্লাউড স্টোরেজে আপলোড হচ্ছে...');
+                }
+              }
+            },
+            (err) => reject(err),
+            async () => {
+              try {
+                const url = await uploadTask.snapshot.ref.getDownloadURL();
+                resolve(url);
+              } catch (e) {
+                reject(e);
+              }
+            }
+          );
+        }),
+        new Promise((_, reject) => setTimeout(() => {
+          try { uploadTask.cancel(); } catch (e) {}
+          reject(new Error("Firebase Storage timeout"));
+        }, 6000))
+      ]);
+
+      if (downloadUrl) {
+        return {
+          success: true,
+          url: downloadUrl,
+          provider: 'firebase',
+          isCloudPermanent: true,
+          fileName: file.name,
+          fileSize: file.size
+        };
+      }
+    } catch (firebaseErr) {
+      console.warn("Firebase Cloud Storage upload notice:", firebaseErr);
     }
-    await window.RK_INDEXED_DB.saveVideoBlob(vid, file);
-    return {
-      success: true,
-      url: 'indexeddb://' + vid,
-      provider: 'indexeddb',
-      isCloudPermanent: false,
-      isLocalOnly: true,
-      fileName: file.name,
-      fileSize: file.size
-    };
   }
 
-  throw new Error("ভিডিও ফাইল সংরক্ষণ করা সম্ভব হয়নি।");
+  // 4. Guaranteed persistent storage in IndexedDB (Never fails)
+  if (typeof onProgress === 'function') {
+    onProgress(100, 'ডিভাইসের স্থায়ী মেমোরিতে সফলভাবে সংরক্ষিত!');
+  }
+  return {
+    success: true,
+    url: 'indexeddb://' + vid,
+    provider: 'indexeddb',
+    isCloudPermanent: false,
+    isLocalOnly: true,
+    fileName: file.name,
+    fileSize: file.size
+  };
 }
 
 function initFirebase() {

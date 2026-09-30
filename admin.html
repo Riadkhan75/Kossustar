@@ -1273,7 +1273,7 @@ service firebase.storage {
             <div class="form-group">
               <label class="form-label">সরাসরি ভিডিও ফাইল সিলেক্ট / আপলোড *</label>
               <div id="videoDropZone" class="video-drop-zone">
-                <input type="file" id="formVideoFileInput" accept="video/mp4,video/webm,video/ogg,video/quicktime,video/*" style="display: none;" />
+                <input type="file" id="formVideoFileInput" accept="video/*,.mp4,.webm,.mkv,.mov,.avi,.flv,.3gp,.ts,.m4v" style="display: none;" />
                 <div id="dropZonePrompt">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--color-primary); margin-bottom: 6px;">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1400,7 +1400,7 @@ service firebase.storage {
 
           <!-- Multi-file Drop Zone -->
           <div id="bulkVideoDropZone" class="video-drop-zone" style="padding: 28px 16px; margin-bottom: 12px;">
-            <input type="file" id="bulkVideoFilesInput" multiple accept="video/mp4,video/webm,video/ogg,video/quicktime,video/*" style="display: none;" />
+            <input type="file" id="bulkVideoFilesInput" multiple accept="video/*,.mp4,.webm,.mkv,.mov,.avi,.flv,.3gp,.ts,.m4v" style="display: none;" />
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: #2563eb; margin-bottom: 8px;">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="17 8 12 3 7 8"></polyline>

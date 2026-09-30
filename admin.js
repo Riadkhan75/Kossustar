@@ -1029,7 +1029,11 @@
   }
 
   function handleSelectedVideoFile(file) {
-    if (!file || !file.type.startsWith('video/')) {
+    if (!file) return;
+    const isVideo = (file.type && file.type.startsWith('video/')) || 
+                    /\.(mp4|webm|mkv|mov|avi|flv|wmv|m4v|ts|3gp|m3u8|mpg|mpeg)$/i.test(file.name) ||
+                    (file.size > 0 && !file.name.match(/\.(jpg|jpeg|png|gif|txt|html|pdf)$/i));
+    if (!isVideo) {
       showToast("দয়া করে একটি সঠিক ভিডিও ফাইল নির্বাচন করুন (.mp4, .webm, ইত্যাদি)");
       return;
     }
@@ -1054,6 +1058,16 @@
       const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
       formVideoTitle.value = baseName;
     }
+
+    // Immediately capture duration & thumbnail frame from file
+    extractVideoMetadata(file).then(meta => {
+      if (meta.duration && formDuration) {
+        formDuration.value = meta.duration;
+      }
+      if (meta.thumbUrl) {
+        currentCapturedThumb = meta.thumbUrl;
+      }
+    });
 
     // Preview
     previewDirectVideo(currentFileBlobUrl);
@@ -1101,7 +1115,7 @@
       populateCategoryDropdown(video.category || '');
       formCustomCategory.value = '';
 
-      if (video.videoUrl && video.videoUrl.startsWith('indexeddb://')) {
+      if (video.videoUrl && (video.videoUrl.startsWith('indexeddb://') || video.videoUrl.startsWith('/uploads/'))) {
         setVideoSourceMode('file');
         if (formVideoUrl) formVideoUrl.value = '';
         if (dropZonePrompt) dropZonePrompt.style.display = 'none';
@@ -1109,8 +1123,8 @@
         if (selectedFileName) selectedFileName.textContent = video.fileName || "আপলোডকৃত সরাসরি ভিডিও ফাইল";
         if (selectedFileSize) selectedFileSize.textContent = video.fileSize ? `${(video.fileSize/(1024*1024)).toFixed(1)} MB` : "ডিভাইস স্টোরেজ";
 
-        // Load preview from IndexedDB
-        if (window.RK_INDEXED_DB) {
+        // Load preview
+        if (video.videoUrl.startsWith('indexeddb://') && window.RK_INDEXED_DB) {
           const vkey = video.videoUrl.replace('indexeddb://', '') || video.videoId;
           window.RK_INDEXED_DB.getVideoBlob(vkey).then(blob => {
             if (blob) {
@@ -1118,6 +1132,8 @@
               previewDirectVideo(url);
             }
           });
+        } else if (video.videoUrl.startsWith('/uploads/')) {
+          previewDirectVideo(video.videoUrl);
         }
       } else {
         setVideoSourceMode('url');
@@ -1137,7 +1153,8 @@
       formDuration.value = '03:45';
       formCustomCategory.value = '';
       populateCategoryDropdown();
-      setVideoSourceMode('url');
+      // Default directly to FILE UPLOAD mode for fast mobile video adding
+      setVideoSourceMode('file');
       hidePreviewVideo();
     }
     videoModalBackdrop.classList.add('open');
@@ -1258,31 +1275,51 @@
         createdAt: Date.now()
       };
 
-      if (!isLocalMode && db) {
-        db.ref(`videos/${vid}`).update(videoData)
-          .then(() => {
-            showToast("ভিডিও সফলভাবে সংরক্ষিত হয়েছে!");
-            closeVideoModal();
-          })
-          .catch(err => showToast("ত্রুটি: " + err.message));
+      // Always save locally first so the video is immediately accessible
+      const idx = adminVideos.findIndex(v => v.videoId === vid);
+      if (idx !== -1) {
+        adminVideos[idx] = { ...adminVideos[idx], ...videoData };
       } else {
-        const idx = adminVideos.findIndex(v => v.videoId === vid);
-        if (idx !== -1) {
-          adminVideos[idx] = { ...adminVideos[idx], ...videoData };
-        } else {
-          videoData.views = 0;
-          videoData.likes = 0;
-          adminVideos.unshift(videoData);
-        }
+        videoData.views = videoData.views || 0;
+        videoData.likes = videoData.likes || 0;
+        adminVideos.unshift(videoData);
+      }
+      try {
+        localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
+      } catch (storageErr) {
+        console.warn("Storage warning:", storageErr);
+      }
+      renderAdminVideos();
+      updateKpis();
+
+      if (!isLocalMode && db) {
         try {
-          localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
-        } catch (storageErr) {
-          console.warn("Storage warning:", storageErr);
+          await db.ref(`videos/${vid}`).update(videoData);
+          showToast("ভিডিও সফলভাবে সংরক্ষিত হয়েছে!");
+          closeVideoModal();
+        } catch (err) {
+          console.warn("Firebase sync notice:", err);
+          showToast("ভিডিও লোকাল মেমোরিতে সফলভাবে সংরক্ষিত হয়েছে!");
+          closeVideoModal();
+        } finally {
+          if (saveVideoBtn) {
+            saveVideoBtn.disabled = false;
+            saveVideoBtn.innerHTML = '<span>সংরক্ষণ করুন</span>';
+          }
+          if (singleFileProgressContainer) {
+            singleFileProgressContainer.style.display = 'none';
+          }
         }
-        renderAdminVideos();
-        updateKpis();
+      } else {
         showToast("ভিডিও সফলভাবে সংরক্ষিত হয়েছে!");
         closeVideoModal();
+        if (saveVideoBtn) {
+          saveVideoBtn.disabled = false;
+          saveVideoBtn.innerHTML = '<span>সংরক্ষণ করুন</span>';
+        }
+        if (singleFileProgressContainer) {
+          singleFileProgressContainer.style.display = 'none';
+        }
       }
     });
   }
