@@ -182,6 +182,25 @@
           <div class="video-card skeleton" style="height: 180px;"></div>
         </div>
 
+        <!-- Pagination Controls (10 Videos Per Page) -->
+        <div class="pagination-container" id="videoPagination" style="display: none;">
+          <button type="button" class="pagination-btn pagination-prev" id="prevPageBtn" aria-label="Previous Page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>পূর্ববর্তী</span>
+          </button>
+          <div class="pagination-numbers" id="paginationNumbers">
+            <!-- Rendered dynamically via app.js -->
+          </div>
+          <button type="button" class="pagination-btn pagination-next" id="nextPageBtn" aria-label="Next Page">
+            <span>পরবর্তী</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+
         <!-- Clean Empty State (Without exposing admin links) -->
         <div id="videoEmptyState" class="empty-state" style="display: none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -202,6 +221,33 @@
       <!-- Adsterra Bottom Ad Banner Slot (Rendered if set in Admin) -->
       <div id="adsterraBottomSlot" class="adsterra-slot rk-stream-feature-bottom" data-ad-protection="active"></div>
     </main>
+
+    <!-- 18+ Alert / Age Verification Modal (Always displayed on first visit) -->
+    <div id="ageAlertModal" class="age-alert-backdrop" role="dialog" aria-modal="true" style="display: none;">
+      <div class="age-alert-box">
+        <div class="age-alert-badge-wrap">
+          <div class="age-badge-18">18+</div>
+        </div>
+        <h2 class="age-alert-title" id="ageAlertTitle">⚠️ ১৮+ সতর্কতা ও বয়স যাচাই</h2>
+        <p class="age-alert-message" id="ageAlertMessage">
+          এই ওয়েবসাইটে ১৮+ কনটেন্ট বা প্রাপ্তবয়স্কদের উপযোগী বিনোদন রয়েছে। ওয়েবসাইটে প্রবেশ করতে হলে আপনার বয়স ১৮ বছর বা তার বেশি হতে হবে।
+        </p>
+        <div class="age-alert-question">
+          আপনার বয়স কি ১৮ বছর বা তার বেশি?
+        </div>
+        <div class="age-alert-actions">
+          <button type="button" class="age-confirm-btn" id="ageConfirmBtn">
+            <span id="ageConfirmBtnText">✅ আমি ১৮+ বছর বয়সী (প্রবেশ করুন)</span>
+          </button>
+          <button type="button" class="age-exit-btn" id="ageExitBtn">
+            <span id="ageExitBtnText">❌ আমার বয়স ১৮ এর কম (বাহির হন)</span>
+          </button>
+        </div>
+        <div class="age-alert-footer-note">
+          🔒 আপনার গোপনীয়তা সুরক্ষিত • কোনো ব্যক্তিগত তথ্য জমা রাখা হয় না
+        </div>
+      </div>
+    </div>
 
     <!-- Anti-AdBlock Notice Modal -->
     <div id="adblockNoticeModal" class="adblock-modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
@@ -261,6 +307,12 @@
           >
             আপনার ব্রাউজারটি ভিডিও সমর্থন করছে না।
           </video>
+          <!-- Player Screen Watermark Overlay -->
+          <div class="player-watermark-overlay" id="playerWatermarkOverlay">
+            <span class="watermark-logo-icon">🔥</span>
+            <span id="playerWatermarkOverlayText">RK VIDEO</span>
+          </div>
+
           <!-- Center Tap-to-Play Overlay (Resolves mobile autoplay restrictions) -->
           <div id="playerCenterPrompt" class="player-center-prompt" style="display: none;">
             <button type="button" id="playerCenterPlayBtn" class="player-center-play-btn" aria-label="Play Video">
@@ -329,6 +381,16 @@
                 <span id="wakeLockText">স্ক্রিন অন সক্রিয়</span>
               </button>
             </div>
+          </div>
+
+          <!-- Watermark Brand Bar Below Video Player -->
+          <div class="player-watermark-footer-bar">
+            <div class="player-watermark-badge">
+              <span class="watermark-dot"></span>
+              <span>অফিসিয়াল স্ট্রিম ওয়াটারমার্ক:</span>
+              <strong id="playerBottomWatermarkText">RK VIDEO</strong>
+            </div>
+            <span class="player-watermark-rights">🛡️ স্বত্বাধিকার সংরক্ষিত • HD স্ট্রিমিং</span>
           </div>
 
           <!-- Adsterra Smartlink In-Player Download & Direct Watch Button -->

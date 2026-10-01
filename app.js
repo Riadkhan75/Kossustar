@@ -22,6 +22,23 @@
   const videoGrid = document.getElementById('videoGrid');
   const videoEmptyState = document.getElementById('videoEmptyState');
   const videoCounter = document.getElementById('videoCounter');
+  const videoPagination = document.getElementById('videoPagination');
+  const prevPageBtn = document.getElementById('prevPageBtn');
+  const nextPageBtn = document.getElementById('nextPageBtn');
+  const paginationNumbers = document.getElementById('paginationNumbers');
+
+  // Pagination & 18+ Alert State
+  const VIDEOS_PER_PAGE = 10;
+  let currentPage = 1;
+
+  // 18+ Alert Modal Elements
+  const ageAlertModal = document.getElementById('ageAlertModal');
+  const ageAlertTitle = document.getElementById('ageAlertTitle');
+  const ageAlertMessage = document.getElementById('ageAlertMessage');
+  const ageConfirmBtn = document.getElementById('ageConfirmBtn');
+  const ageConfirmBtnText = document.getElementById('ageConfirmBtnText');
+  const ageExitBtn = document.getElementById('ageExitBtn');
+  const ageExitBtnText = document.getElementById('ageExitBtnText');
   const searchContainer = document.getElementById('searchContainer');
   const searchInput = document.getElementById('searchInput');
   const searchClearBtn = document.getElementById('searchClearBtn');
@@ -486,6 +503,17 @@
       } catch (e) {}
     }
 
+    // Watermark Branding Update
+    const watermarkVal = (settings.watermarkText || settings.siteName || (siteBrandName ? siteBrandName.textContent : 'RK VIDEO') || 'RK VIDEO').trim();
+    const playerWatermarkOverlayText = document.getElementById('playerWatermarkOverlayText');
+    if (playerWatermarkOverlayText) {
+      playerWatermarkOverlayText.textContent = watermarkVal;
+    }
+    const playerBottomWatermarkText = document.getElementById('playerBottomWatermarkText');
+    if (playerBottomWatermarkText) {
+      playerBottomWatermarkText.textContent = watermarkVal;
+    }
+
     // Live Badge Text
     if (settings.liveBadgeText && liveBadgeText) {
       liveBadgeText.textContent = settings.liveBadgeText;
@@ -543,6 +571,31 @@
       if (adsterraBottomSlot) adsterraBottomSlot.style.display = 'none';
       if (topMessageAdBar) topMessageAdBar.style.display = 'none';
     }
+
+    // 18+ Age Alert Modal Texts and Dynamic Settings
+    if (settings.ageAlertTitle && ageAlertTitle) {
+      ageAlertTitle.textContent = settings.ageAlertTitle;
+    }
+    if (settings.ageAlertMessage && ageAlertMessage) {
+      ageAlertMessage.textContent = settings.ageAlertMessage;
+    }
+    if (settings.ageAlertConfirmBtn && ageConfirmBtnText) {
+      ageConfirmBtnText.textContent = settings.ageAlertConfirmBtn;
+    }
+    if (settings.ageAlertExitBtn && ageExitBtnText) {
+      ageExitBtnText.textContent = settings.ageAlertExitBtn;
+    }
+
+    if (settings.ageAlertEnabled === false && ageAlertModal) {
+      ageAlertModal.style.display = 'none';
+      document.body.style.overflow = '';
+    } else if (settings.ageAlertEnabled !== false && ageAlertModal) {
+      const isVerified = sessionStorage.getItem('rk_age_verified') === 'true';
+      if (!isVerified) {
+        ageAlertModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    }
   }
 
   // Render Category Chips Dynamically (Newest Added Category Shows at the Top/Front)
@@ -564,10 +617,8 @@
     categoryChipsContainer.innerHTML = html;
   }
 
-  // Filter & Render Videos
-  function renderVideos() {
-    if (!videoGrid) return;
-
+  // Filter and Sort Video Collection
+  function getFilteredVideos() {
     let filtered = allVideos.filter(v => v.active !== false);
 
     // Filter by Category
@@ -591,20 +642,136 @@
 
     // Sort by latest createdAt
     filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return filtered;
+  }
 
-    if (videoCounter) {
-      videoCounter.textContent = `${filtered.length} টি ভিডিও`;
+  // Smooth scroll back to videos section when navigating pages
+  function scrollToVideos() {
+    const section = document.querySelector('.videos-section');
+    if (section) {
+      const topOffset = section.getBoundingClientRect().top + window.pageYOffset - 75;
+      window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
+    }
+  }
+
+  // Render Smart Pagination Bar (10 Videos Per Page)
+  function renderPaginationControls(totalPages) {
+    if (!videoPagination || !paginationNumbers) return;
+
+    if (totalPages <= 1) {
+      videoPagination.style.display = 'none';
+      return;
     }
 
-    if (filtered.length === 0) {
+    videoPagination.style.display = 'flex';
+
+    if (prevPageBtn) {
+      prevPageBtn.disabled = currentPage <= 1;
+    }
+    if (nextPageBtn) {
+      nextPageBtn.disabled = currentPage >= totalPages;
+    }
+
+    // Build page number list with ellipsis for larger sets
+    let pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) pages.push(i);
+      }
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      if (!pages.includes(totalPages)) {
+        pages.push(totalPages);
+      }
+    }
+
+    paginationNumbers.innerHTML = pages.map(p => {
+      if (p === '...') {
+        return `<span class="page-ellipsis">...</span>`;
+      }
+      const isActive = p === currentPage ? 'active' : '';
+      return `<button type="button" class="page-num-btn ${isActive}" data-page="${p}">${p}</button>`;
+    }).join('');
+
+    paginationNumbers.querySelectorAll('.page-num-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const page = parseInt(btn.getAttribute('data-page'), 10);
+        if (page && page !== currentPage) {
+          currentPage = page;
+          renderVideos();
+          scrollToVideos();
+        }
+      });
+    });
+  }
+
+  // Pagination Next & Prev Button Event Listeners
+  function setupPaginationEvents() {
+    if (prevPageBtn) {
+      prevPageBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          renderVideos();
+          scrollToVideos();
+        }
+      });
+    }
+    if (nextPageBtn) {
+      nextPageBtn.addEventListener('click', () => {
+        const filtered = getFilteredVideos();
+        const totalPages = Math.ceil(filtered.length / VIDEOS_PER_PAGE) || 1;
+        if (currentPage < totalPages) {
+          currentPage++;
+          renderVideos();
+          scrollToVideos();
+        }
+      });
+    }
+  }
+
+  // Filter & Render Videos (10 Videos Per Page)
+  function renderVideos() {
+    if (!videoGrid) return;
+
+    const filtered = getFilteredVideos();
+    const totalVideos = filtered.length;
+    const totalPages = Math.ceil(totalVideos / VIDEOS_PER_PAGE) || 1;
+
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    if (videoCounter) {
+      if (totalPages > 1) {
+        videoCounter.textContent = `${totalVideos} টি ভিডিও (পৃষ্ঠা ${currentPage}/${totalPages})`;
+      } else {
+        videoCounter.textContent = `${totalVideos} টি ভিডিও`;
+      }
+    }
+
+    if (totalVideos === 0) {
       videoGrid.innerHTML = '';
       if (videoEmptyState) videoEmptyState.style.display = 'block';
+      if (videoPagination) videoPagination.style.display = 'none';
       return;
     }
 
     if (videoEmptyState) videoEmptyState.style.display = 'none';
 
-    videoGrid.innerHTML = filtered.map(v => {
+    // Slice 10 videos for current page
+    const startIndex = (currentPage - 1) * VIDEOS_PER_PAGE;
+    const pageVideos = filtered.slice(startIndex, startIndex + VIDEOS_PER_PAGE);
+    const watermarkText = (currentSettings.watermarkText || currentSettings.siteName || (siteBrandName ? siteBrandName.textContent : 'RK VIDEO') || 'RK VIDEO').trim();
+
+    videoGrid.innerHTML = pageVideos.map(v => {
       const formattedViews = formatNumber(v.views || 0);
       const formattedLikes = formatNumber(v.likes || 0);
       const thumb = v.thumbUrl || '';
@@ -621,22 +788,15 @@
             alt="${escapeHtml(v.title || 'Video')}" 
             class="video-thumb" 
             loading="lazy" 
+            decoding="async"
+            width="320"
+            height="180"
           />
-        `;
-      } else if (!isIndexed && safeUrl) {
-        mediaHtml = `
-          <video 
-            class="video-thumb" 
-            preload="metadata" 
-            muted 
-            playsinline 
-            src="${escapeHtml(safeUrl)}#t=0.5"
-          ></video>
         `;
       } else {
         mediaHtml = `
-          <div class="video-thumb" style="display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e293b, #0f172a); color: var(--color-primary);">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+          <div class="video-thumb" style="display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e293b, #0f172a); color: var(--color-primary); width: 100%; height: 100%;">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
           </div>
@@ -648,6 +808,7 @@
           <div class="video-thumb-wrap">
             ${mediaHtml}
             <span class="video-badge-hd">HD</span>
+            <span class="video-thumb-watermark">${escapeHtml(watermarkText)}</span>
             <span class="video-badge-duration">${escapeHtml(duration)}</span>
             <div class="video-play-overlay">
               <div class="play-circle">
@@ -665,6 +826,19 @@
               </span>
               <span class="video-likes" title="মোট লাইক">
                 👍 ${formattedLikes}
+              </span>
+            </div>
+            <!-- Website Watermark Row Below Video Info -->
+            <div class="video-watermark-row">
+              <div class="video-watermark-badge">
+                <span class="watermark-dot"></span>
+                <span class="watermark-site-name">${escapeHtml(watermarkText)}</span>
+              </div>
+              <span class="video-watermark-verify" title="অফিসিয়াল সুরক্ষিত ভিডিও">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <span>অফিসিয়াল</span>
               </span>
             </div>
           </div>
@@ -688,6 +862,9 @@
         }
       });
     });
+
+    // Render pagination controls (Page 1, 2, Next, Prev)
+    renderPaginationControls(totalPages);
   }
 
   let activeVideoBlobUrl = null;
@@ -869,6 +1046,16 @@
     const isLiked = localStorage.getItem(`rk_liked_${video.videoId}`) === 'true';
     updateLikeButtonUI(isLiked);
 
+    const activeWatermark = (currentSettings.watermarkText || currentSettings.siteName || (siteBrandName ? siteBrandName.textContent : 'RK VIDEO') || 'RK VIDEO').trim();
+    const playerWatermarkOverlayText = document.getElementById('playerWatermarkOverlayText');
+    if (playerWatermarkOverlayText) {
+      playerWatermarkOverlayText.textContent = activeWatermark;
+    }
+    const playerBottomWatermarkText = document.getElementById('playerBottomWatermarkText');
+    if (playerBottomWatermarkText) {
+      playerBottomWatermarkText.textContent = activeWatermark;
+    }
+
     playerBackdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
 
@@ -1032,6 +1219,7 @@
       chip.classList.add('active');
 
       currentCategory = chip.getAttribute('data-category') || 'All';
+      currentPage = 1;
       renderVideos();
     });
   }
@@ -1062,6 +1250,7 @@
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value;
+        currentPage = 1;
         if (searchClearBtn) {
           searchClearBtn.classList.toggle('visible', searchQuery.length > 0);
         }
@@ -1073,6 +1262,7 @@
       searchClearBtn.addEventListener('click', () => {
         searchInput.value = '';
         searchQuery = '';
+        currentPage = 1;
         searchClearBtn.classList.remove('visible');
         renderVideos();
         searchInput.focus();
@@ -1080,16 +1270,23 @@
     }
   }
 
-  // Back to Top and Scroll Helpers
+  // Back to Top and Scroll Helpers (Throttled 60fps)
   function setupScroll() {
+    let scrollTicking = false;
     window.addEventListener('scroll', () => {
-      if (!backToTopBtn) return;
-      if (window.scrollY > 280) {
-        backToTopBtn.classList.add('visible');
-      } else {
-        backToTopBtn.classList.remove('visible');
+      if (!scrollTicking) {
+        window.requestAnimationFrame(() => {
+          if (backToTopBtn) {
+            const isScrolled = window.scrollY > 280;
+            if (backToTopBtn.classList.contains('visible') !== isScrolled) {
+              backToTopBtn.classList.toggle('visible', isScrolled);
+            }
+          }
+          scrollTicking = false;
+        });
+        scrollTicking = true;
       }
-    });
+    }, { passive: true });
 
     if (backToTopBtn) {
       backToTopBtn.addEventListener('click', () => {
@@ -1506,6 +1703,55 @@
     }
   }
 
+  // 18+ Alert Modal Setup (Age Verification on Entry)
+  function initAgeAlertModal() {
+    if (!ageAlertModal) return;
+
+    // Check if 18+ alert is enabled in settings (default true)
+    const isEnabled = currentSettings.ageAlertEnabled !== false;
+    // Check if user has already verified in this session or stored
+    const isVerified = sessionStorage.getItem('rk_age_verified') === 'true';
+
+    if (isEnabled && !isVerified) {
+      ageAlertModal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    } else {
+      ageAlertModal.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    if (ageConfirmBtn) {
+      ageConfirmBtn.addEventListener('click', () => {
+        sessionStorage.setItem('rk_age_verified', 'true');
+        try {
+          localStorage.setItem('rk_age_verified', 'true');
+        } catch (e) {}
+
+        ageAlertModal.style.opacity = '0';
+        ageAlertModal.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => {
+          ageAlertModal.style.display = 'none';
+          document.body.style.overflow = '';
+        }, 250);
+
+        showToast('✅ স্বাগতম! আপনি ১৮+ যাচাই করে সফলভাবে প্রবেশ করেছেন।', 3500);
+      });
+    }
+
+    if (ageExitBtn) {
+      ageExitBtn.addEventListener('click', () => {
+        alert('⚠️ দুঃখিত! এই ওয়েবসাইটে শুধুমাত্র ১৮ বছর বা তার বেশি বয়সীদের প্রবেশের অনুমতি রয়েছে।');
+        try {
+          window.location.href = 'https://www.google.com';
+        } catch (e) {
+          if (ageAlertMessage) {
+            ageAlertMessage.innerHTML = '<span style="color: #ef4444; font-weight: bold;">⛔ আপনি এই সাইটে প্রবেশের যোগ্য নন। ১৮ বছরের কম বয়সীদের জন্য এই সাইট সম্পূর্ণ নিষিদ্ধ।</span>';
+          }
+        }
+      });
+    }
+  }
+
   // Init App on DOM Loaded
   document.addEventListener('DOMContentLoaded', () => {
     preLoadSiteBranding();
@@ -1513,6 +1759,8 @@
     setupTopMessageAdEvents();
     setupCategories();
     setupSearch();
+    setupPaginationEvents();
+    initAgeAlertModal();
     setupMenuDrawer();
     setupScroll();
     setupPlayerEvents();

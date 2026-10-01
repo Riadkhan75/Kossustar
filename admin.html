@@ -1103,8 +1103,48 @@
                 </div>
               </div>
 
+              <!-- 8. 18+ Age Alert & Warning Modal Configuration -->
+              <div class="form-group" style="background: rgba(245, 158, 11, 0.05); padding: 16px; border-radius: var(--radius-md); border: 1.5px solid rgba(245, 158, 11, 0.35); margin-top: 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.25rem;">🔞⚠️</span>
+                    <label class="form-label" style="color: #d97706; font-weight: 700; margin-bottom: 0;">
+                      ৮. সাইটে ১৮+ সতর্কতা ও বয়স যাচাই পপআপ (18+ Age Verification Alert)
+                    </label>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="ageAlertEnabledSwitch" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 12px; line-height: 1.45;">
+                  ভিজিটর সাইটে ঢুকলে এই ১৮+ সতর্কবার্তা ও অনুমতি চাওয়া হবে। ১৮ বছরের কম বয়সীরা প্রবেশ করতে পারবে না।
+                </p>
+
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label class="form-label" for="settingAgeAlertTitle" style="font-size: 0.82rem;">সতর্কতার শিরোনাম (Title)</label>
+                  <input type="text" id="settingAgeAlertTitle" class="form-input" value="⚠️ ১৮+ সতর্কতা ও বয়স যাচাই" />
+                </div>
+
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label class="form-label" for="settingAgeAlertMessage" style="font-size: 0.82rem;">সতর্কতার বার্তা (Message Text)</label>
+                  <textarea id="settingAgeAlertMessage" class="form-textarea" rows="2">এই ওয়েবসাইটে ১৮+ কনটেন্ট বা প্রাপ্তবয়স্কদের উপযোগী বিনোদন রয়েছে। ওয়েবসাইটে প্রবেশ করতে হলে আপনার বয়স ১৮ বছর বা তার বেশি হতে হবে।</textarea>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <div>
+                    <label class="form-label" for="settingAgeConfirmBtn" style="font-size: 0.82rem;">প্রবেশ বাটন টেক্সট</label>
+                    <input type="text" id="settingAgeConfirmBtn" class="form-input" value="✅ আমি ১৮+ বছর বয়সী (প্রবেশ করুন)" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="settingAgeExitBtn" style="font-size: 0.82rem;">বাহির বাটন টেক্সট</label>
+                    <input type="text" id="settingAgeExitBtn" class="form-input" value="❌ আমার বয়স ১৮ এর কম (বাহির হন)" />
+                  </div>
+                </div>
+              </div>
+
               <button type="submit" class="btn-primary" style="margin-top: 10px;">
-                <span>অ্যাডস্টেরা সেটিংস সংরক্ষণ করুন</span>
+                <span>বিজ্ঞাপন ও ১৮+ সেটিংস সংরক্ষণ করুন</span>
               </button>
             </form>
           </div>
@@ -1132,6 +1172,18 @@
               <div class="form-group">
                 <label class="form-label" for="settingLiveBadgeText">লাইভ ব্যাজ টেক্সট (LIVE Badge Text)</label>
                 <input type="text" id="settingLiveBadgeText" class="form-input" value="LIVE 4K" required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="settingWatermarkText">ভিডিও ওয়াটারমার্ক ব্র্যান্ডিং (Video Watermark Text)</label>
+                <input 
+                  type="text" 
+                  id="settingWatermarkText" 
+                  class="form-input" 
+                  value="RK VIDEO" 
+                  placeholder="যেমন: RK VIDEO বা আপনার ওয়েবসাইটের নাম" 
+                />
+                <small style="color: var(--color-text-muted); font-size: 0.75rem;">এই টেক্সটটি সকল ভিডিওর নিচে এবং ভিডিও প্লেয়ারের উপর স্থায়ী ওয়াটারমার্ক হিসেবে প্রদর্শিত হবে।</small>
               </div>
 
               <div class="form-group">

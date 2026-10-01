@@ -62,7 +62,17 @@ const INITIAL_SITE_SETTINGS = {
   antiAdblockNotice: true,
   adultAdsAlwaysActive: true,
   adultAdsTriggerOnPlay: true,
-  adultDirectUrl: ""
+  adultDirectUrl: "",
+  ageAlertEnabled: true,
+  ageAlertTitle: "⚠️ ১৮+ সতর্কতা ও বয়স যাচাই",
+  ageAlertMessage: "এই ওয়েবসাইটে ১৮+ কনটেন্ট বা প্রাপ্তবয়স্কদের উপযোগী বিনোদন রয়েছে। ওয়েবসাইটে প্রবেশ করতে হলে আপনার বয়স ১৮ বছর বা তার বেশি হতে হবে।",
+  ageAlertConfirmBtn: "✅ আমি ১৮+ বছর বয়সী (প্রবেশ করুন)",
+  ageAlertExitBtn: "❌ আমার বয়স ১৮ এর কম (বাহির হন)",
+  watermarkText: "RK VIDEO",
+  telegramChannelLink: "https://t.me/+c4pWPb0Ip4JmMGE1",
+  telegramAutoPostEnabled: true,
+  telegramBotToken: "",
+  telegramChatId: ""
 };
 
 // Safe Direct Video & Cloud Storage URL Formatter (Dropbox, Google Drive, Direct MP4/WebM)

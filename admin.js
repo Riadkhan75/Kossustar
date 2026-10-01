@@ -1945,6 +1945,8 @@
       localStorage.setItem('rk_site_name', currentName);
     } catch(e) {}
     if (settingLiveBadgeText) settingLiveBadgeText.value = s.liveBadgeText || 'LIVE 4K';
+    const settingWatermarkText = document.getElementById('settingWatermarkText');
+    if (settingWatermarkText) settingWatermarkText.value = s.watermarkText || s.siteName || 'RK VIDEO';
     if (settingPrimaryColor) settingPrimaryColor.value = s.primaryColor || '#ff4500';
     if (settingPrimaryColorPicker) settingPrimaryColorPicker.value = s.primaryColor || '#ff4500';
 
@@ -1975,6 +1977,19 @@
     if (adultAdsTriggerOnPlay) adultAdsTriggerOnPlay.checked = s.adultAdsTriggerOnPlay !== false;
     if (antiAdblockNotice) antiAdblockNotice.checked = s.antiAdblockNotice !== false;
     if (adultDirectUrl) adultDirectUrl.value = s.adultDirectUrl || '';
+
+    // 18+ Age Alert Settings
+    const ageAlertEnabledSwitch = document.getElementById('ageAlertEnabledSwitch');
+    const settingAgeAlertTitle = document.getElementById('settingAgeAlertTitle');
+    const settingAgeAlertMessage = document.getElementById('settingAgeAlertMessage');
+    const settingAgeConfirmBtn = document.getElementById('settingAgeConfirmBtn');
+    const settingAgeExitBtn = document.getElementById('settingAgeExitBtn');
+
+    if (ageAlertEnabledSwitch) ageAlertEnabledSwitch.checked = s.ageAlertEnabled !== false;
+    if (settingAgeAlertTitle) settingAgeAlertTitle.value = s.ageAlertTitle || '⚠️ ১৮+ সতর্কতা ও বয়স যাচাই';
+    if (settingAgeAlertMessage) settingAgeAlertMessage.value = s.ageAlertMessage || 'এই ওয়েবসাইটে ১৮+ কনটেন্ট বা প্রাপ্তবয়স্কদের উপযোগী বিনোদন রয়েছে। ওয়েবসাইটে প্রবেশ করতে হলে আপনার বয়স ১৮ বছর বা তার বেশি হতে হবে।';
+    if (settingAgeConfirmBtn) settingAgeConfirmBtn.value = s.ageAlertConfirmBtn || '✅ আমি ১৮+ বছর বয়সী (প্রবেশ করুন)';
+    if (settingAgeExitBtn) settingAgeExitBtn.value = s.ageAlertExitBtn || '❌ আমার বয়স ১৮ এর কম (বাহির হন)';
   }
 
   // Bottom Banner Quick Format Template Inserters
@@ -2071,7 +2086,12 @@
         adultAdsAlwaysActive: document.getElementById('adultAdsAlwaysActive') ? document.getElementById('adultAdsAlwaysActive').checked : true,
         adultAdsTriggerOnPlay: document.getElementById('adultAdsTriggerOnPlay') ? document.getElementById('adultAdsTriggerOnPlay').checked : true,
         antiAdblockNotice: document.getElementById('antiAdblockNotice') ? document.getElementById('antiAdblockNotice').checked : true,
-        adultDirectUrl: (document.getElementById('adultDirectUrl') ? document.getElementById('adultDirectUrl').value : '').trim()
+        adultDirectUrl: (document.getElementById('adultDirectUrl') ? document.getElementById('adultDirectUrl').value : '').trim(),
+        ageAlertEnabled: document.getElementById('ageAlertEnabledSwitch') ? document.getElementById('ageAlertEnabledSwitch').checked : true,
+        ageAlertTitle: (document.getElementById('settingAgeAlertTitle') ? document.getElementById('settingAgeAlertTitle').value : '').trim() || '⚠️ ১৮+ সতর্কতা ও বয়স যাচাই',
+        ageAlertMessage: (document.getElementById('settingAgeAlertMessage') ? document.getElementById('settingAgeAlertMessage').value : '').trim() || 'এই ওয়েবসাইটে ১৮+ কনটেন্ট বা প্রাপ্তবয়স্কদের উপযোগী বিনোদন রয়েছে। ওয়েবসাইটে প্রবেশ করতে হলে আপনার বয়স ১৮ বছর বা তার বেশি হতে হবে।',
+        ageAlertConfirmBtn: (document.getElementById('settingAgeConfirmBtn') ? document.getElementById('settingAgeConfirmBtn').value : '').trim() || '✅ আমি ১৮+ বছর বয়সী (প্রবেশ করুন)',
+        ageAlertExitBtn: (document.getElementById('settingAgeExitBtn') ? document.getElementById('settingAgeExitBtn').value : '').trim() || '❌ আমার বয়স ১৮ এর কম (বাহির হন)'
       };
 
       if (!isLocalMode && db) {
@@ -2091,9 +2111,11 @@
     siteSettingsForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const newSiteName = settingSiteName.value.trim() || 'RK VIDEO';
+      const watermarkVal = (document.getElementById('settingWatermarkText') ? document.getElementById('settingWatermarkText').value.trim() : '') || newSiteName;
       const updatedSettings = {
         ...adminSettings,
         siteName: newSiteName,
+        watermarkText: watermarkVal,
         liveBadgeText: settingLiveBadgeText.value.trim(),
         primaryColor: settingPrimaryColor.value.trim()
       };
