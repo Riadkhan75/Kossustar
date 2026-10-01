@@ -1422,7 +1422,8 @@
 
         tempVideo.addEventListener('loadeddata', () => {
           try {
-            tempVideo.currentTime = Math.min(1.0, (tempVideo.duration || 2) / 2);
+            // Seek to 1st second (instant keyframe) instead of middle to avoid freezing on big videos
+            tempVideo.currentTime = Math.min(1.0, (tempVideo.duration > 0.5 ? 0.8 : 0.1));
           } catch (e) {
             done('03:30', '');
           }
@@ -1433,12 +1434,12 @@
           let thumb = '';
           try {
             const canvas = document.createElement('canvas');
-            canvas.width = Math.min(tempVideo.videoWidth || 480, 480);
-            canvas.height = Math.min(tempVideo.videoHeight || 270, 270);
+            canvas.width = Math.min(tempVideo.videoWidth || 360, 360);
+            canvas.height = Math.min(tempVideo.videoHeight || 202, 202);
             if (canvas.width > 0 && canvas.height > 0) {
               const ctx = canvas.getContext('2d');
               ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-              thumb = canvas.toDataURL('image/jpeg', 0.65);
+              thumb = canvas.toDataURL('image/jpeg', 0.5);
             }
           } catch (e) {}
           const dur = formatSecondsToDuration(tempVideo.duration);
@@ -1658,15 +1659,20 @@
         createdAt: Date.now() + i
       };
 
-      // 3. Save to Firebase or LocalStorage
+      // 3. Save to Local state and Firebase
+      const existIdx = adminVideos.findIndex(v => v.videoId === vid);
+      if (existIdx !== -1) {
+        adminVideos[existIdx] = videoData;
+      } else {
+        adminVideos.unshift(videoData);
+      }
+
       if (!isLocalMode && db) {
         try {
           await db.ref(`videos/${vid}`).set(videoData);
         } catch (fbErr) {
           console.error("Firebase bulk video save error:", fbErr);
         }
-      } else {
-        adminVideos.unshift(videoData);
       }
 
       savedCount++;
@@ -1675,15 +1681,13 @@
       if (bulkFilesProgressFill) bulkFilesProgressFill.style.width = `${donePct}%`;
     }
 
-    if (isLocalMode || !db) {
-      try {
-        localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
-      } catch (storageErr) {
-        console.warn("Storage warning:", storageErr);
-      }
-      renderAdminVideos();
-      updateKpis();
+    try {
+      localStorage.setItem('rk_local_videos', JSON.stringify(adminVideos));
+    } catch (storageErr) {
+      console.warn("Storage warning:", storageErr);
     }
+    renderAdminVideos();
+    updateKpis();
 
     isBulkProcessing = false;
     if (cancelBulkFilesBtn) cancelBulkFilesBtn.disabled = false;

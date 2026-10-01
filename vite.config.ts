@@ -25,51 +25,138 @@ const adminRoutePlugin = (): Plugin => ({
 const videoUploadPlugin = (): Plugin => ({
   name: 'video-upload-handler',
   configureServer(server) {
-    // 0. Stream uploaded videos with Range header support for seeking
+    // 0. Stream uploaded videos with full RFC 7233 Range header support for seeking, fast buffering & mobile
     server.middlewares.use((req, res, next) => {
       const url = req.url ? req.url.split('?')[0] : '';
-      if (req.method === 'GET' && url.startsWith('/uploads/')) {
-        const fileName = path.basename(url);
-        const filePath = path.resolve(__dirname, 'public/uploads', fileName);
-        if (fs.existsSync(filePath)) {
-          const stats = fs.statSync(filePath);
-          const ext = path.extname(fileName).toLowerCase();
-          const mimeTypes: Record<string, string> = {
-            '.mp4': 'video/mp4',
-            '.webm': 'video/webm',
-            '.ogg': 'video/ogg',
-            '.mov': 'video/quicktime',
-            '.mkv': 'video/x-matroska',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png'
-          };
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-          const range = req.headers.range;
-          if (range) {
-            const parts = range.replace(/bytes=/, '').split('-');
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : stats.size - 1;
-            const chunksize = (end - start) + 1;
-            const fileStream = fs.createReadStream(filePath, { start, end });
-
-            res.writeHead(206, {
-              'Content-Range': `bytes ${start}-${end}/${stats.size}`,
-              'Accept-Ranges': 'bytes',
-              'Content-Length': chunksize,
-              'Content-Type': contentType,
-            });
-            fileStream.pipe(res);
-          } else {
-            res.writeHead(200, {
-              'Content-Length': stats.size,
-              'Content-Type': contentType,
-              'Accept-Ranges': 'bytes',
-            });
-            fs.createReadStream(filePath).pipe(res);
-          }
+      if (url.startsWith('/uploads/')) {
+        // Preflight CORS
+        if (req.method === 'OPTIONS') {
+          res.writeHead(200, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range, Content-Type',
+          });
+          res.end();
           return;
+        }
+
+        if (req.method === 'GET' || req.method === 'HEAD') {
+          const fileName = path.basename(url);
+          const filePath = path.resolve(__dirname, 'public/uploads', fileName);
+          if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            const ext = path.extname(fileName).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              '.mp4': 'video/mp4',
+              '.webm': 'video/webm',
+              '.ogg': 'video/ogg',
+              '.mov': 'video/quicktime',
+              '.mkv': 'video/x-matroska',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.png': 'image/png'
+            };
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+            const range = req.headers.range;
+            let start = 0;
+            let end = stats.size - 1;
+            let isRange = false;
+
+            if (range && range.startsWith('bytes=')) {
+              const parts = range.replace(/bytes=/, '').split('-');
+              const rawStart = parts[0].trim();
+              const rawEnd = parts[1] ? parts[1].trim() : '';
+
+              if (rawStart === '' && rawEnd !== '') {
+                // Suffix range: bytes=-500 (last 500 bytes of file)
+                const suffixLen = parseInt(rawEnd, 10);
+                if (!isNaN(suffixLen) && suffixLen > 0) {
+                  start = Math.max(0, stats.size - suffixLen);
+                  end = stats.size - 1;
+                  isRange = true;
+                }
+              } else if (rawStart !== '') {
+                const parsedStart = parseInt(rawStart, 10);
+                if (!isNaN(parsedStart)) {
+                  start = parsedStart;
+                  if (rawEnd !== '') {
+                    const parsedEnd = parseInt(rawEnd, 10);
+                    if (!isNaN(parsedEnd)) {
+                      end = Math.min(parsedEnd, stats.size - 1);
+                    }
+                  }
+                  isRange = true;
+                }
+              }
+            }
+
+            // Boundary validation: range out of bounds
+            if (isRange && (start >= stats.size || start < 0 || end < start)) {
+              res.writeHead(416, {
+                'Content-Range': `bytes */${stats.size}`,
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*'
+              });
+              res.end();
+              return;
+            }
+
+            const chunksize = (end - start) + 1;
+            const headers: Record<string, string | number> = {
+              'Content-Type': contentType,
+              'Accept-Ranges': 'bytes',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+              'Access-Control-Allow-Headers': 'Range, Content-Type',
+              'Cache-Control': 'public, max-age=86400'
+            };
+
+            if (req.method === 'HEAD') {
+              if (isRange) {
+                headers['Content-Range'] = `bytes ${start}-${end}/${stats.size}`;
+                headers['Content-Length'] = chunksize;
+                res.writeHead(206, headers);
+              } else {
+                headers['Content-Length'] = stats.size;
+                res.writeHead(200, headers);
+              }
+              res.end();
+              return;
+            }
+
+            if (isRange) {
+              headers['Content-Range'] = `bytes ${start}-${end}/${stats.size}`;
+              headers['Content-Length'] = chunksize;
+              res.writeHead(206, headers);
+              const fileStream = fs.createReadStream(filePath, { start, end });
+              fileStream.pipe(res);
+              req.on('close', () => fileStream.destroy());
+              fileStream.on('error', () => {
+                fileStream.destroy();
+                if (!res.headersSent) res.writeHead(500);
+                res.end();
+              });
+            } else {
+              headers['Content-Length'] = stats.size;
+              res.writeHead(200, headers);
+              const fileStream = fs.createReadStream(filePath);
+              fileStream.pipe(res);
+              req.on('close', () => fileStream.destroy());
+              fileStream.on('error', () => {
+                fileStream.destroy();
+                if (!res.headersSent) res.writeHead(500);
+                res.end();
+              });
+            }
+            return;
+          } else {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.end(JSON.stringify({ error: 'Video file not found' }));
+            return;
+          }
         }
       }
       next();
@@ -77,9 +164,20 @@ const videoUploadPlugin = (): Plugin => ({
 
     // 1. Upload Video Endpoint: /api/upload-video
     server.middlewares.use('/api/upload-video', (req, res) => {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, x-filename',
+        });
+        res.end();
+        return;
+      }
+
       if (req.method !== 'POST') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
         res.end(JSON.stringify({ error: 'Method Not Allowed' }));
         return;
       }
@@ -102,11 +200,26 @@ const videoUploadPlugin = (): Plugin => ({
 
         req.pipe(writeStream);
 
+        req.on('aborted', () => {
+          writeStream.destroy();
+          if (fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) {}
+          }
+        });
+
+        req.on('error', () => {
+          writeStream.destroy();
+          if (fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) {}
+          }
+        });
+
         writeStream.on('finish', () => {
           try {
             const stats = fs.statSync(filePath);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
             res.end(JSON.stringify({
               success: true,
               url: `/uploads/${finalName}`,
@@ -116,6 +229,7 @@ const videoUploadPlugin = (): Plugin => ({
           } catch (statErr) {
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
             res.end(JSON.stringify({
               success: true,
               url: `/uploads/${finalName}`,
@@ -128,12 +242,14 @@ const videoUploadPlugin = (): Plugin => ({
           console.error('Video file write error:', err);
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
           res.end(JSON.stringify({ error: 'Failed to write video file' }));
         });
       } catch (err: any) {
         console.error('Video upload handling error:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
         res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
       }
     });

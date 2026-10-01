@@ -203,8 +203,8 @@ async function uploadVideoToCloud(file, videoId, onProgress) {
     const encodedName = encodeURIComponent(file.name || 'video.mp4');
     const xhr = new XMLHttpRequest();
     const serverUrl = await new Promise((resolve, reject) => {
-      // 45-second timeout for large video uploads
-      xhr.timeout = 45000;
+      // 10-minute timeout so large videos (50MB - 500MB) can upload without aborting
+      xhr.timeout = 600000;
       xhr.open('POST', `/api/upload-video?filename=${encodedName}`, true);
       xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 

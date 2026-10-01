@@ -44,6 +44,7 @@
   // Player Elements
   const playerBackdrop = document.getElementById('playerModalBackdrop');
   const playerCloseBtn = document.getElementById('playerCloseBtn');
+  const playerPipBtn = document.getElementById('playerPipBtn');
   const mainVideoPlayer = document.getElementById('mainVideoPlayer');
   const playerTitle = document.getElementById('playerTitle');
   const playerHeaderTitle = document.getElementById('playerHeaderTitle');
@@ -55,6 +56,29 @@
   const playerShareBtn = document.getElementById('playerShareBtn');
   const playerLiveIndicator = document.getElementById('playerLiveIndicator');
   const navLiveBadge = document.getElementById('navLiveBadge');
+
+  // Background Playback & Screen Control Elements
+  const bgPlayToggle = document.getElementById('bgPlayToggle');
+  const wakeLockBtn = document.getElementById('wakeLockBtn');
+  const wakeLockText = document.getElementById('wakeLockText');
+  const playerCenterPrompt = document.getElementById('playerCenterPrompt');
+  const playerCenterPlayBtn = document.getElementById('playerCenterPlayBtn');
+  const playerErrorOverlay = document.getElementById('playerErrorOverlay');
+  const playerErrorText = document.getElementById('playerErrorText');
+  const playerRetryBtn = document.getElementById('playerRetryBtn');
+
+  // PWA Install Elements
+  const pwaInstallNavBtn = document.getElementById('pwaInstallNavBtn');
+  const menuInstallBtn = document.getElementById('menuInstallBtn');
+  const pwaInstallPromptBar = document.getElementById('pwaInstallPromptBar');
+  const pwaInstallConfirmBtn = document.getElementById('pwaInstallConfirmBtn');
+  const pwaInstallDismissBtn = document.getElementById('pwaInstallDismissBtn');
+
+  // Background State & Wake Lock State
+  let deferredInstallPrompt = null;
+  let isBackgroundPlayEnabled = localStorage.getItem('rk_bg_play') !== 'false';
+  let isWakeLockEnabled = localStorage.getItem('rk_screen_wake') !== 'false';
+  let activeWakeLock = null;
 
   // Anti-Adblock Modal Elements
   const adblockNoticeModal = document.getElementById('adblockNoticeModal');
@@ -327,14 +351,33 @@
       // 1. Listen for Videos (/videos)
       db.ref('videos').on('value', (snapshot) => {
         const val = snapshot.val();
+        let fbVideos = [];
         if (val) {
-          allVideos = Object.keys(val).map(key => ({
+          fbVideos = Object.keys(val).map(key => ({
             ...val[key],
             videoId: val[key].videoId || key
           }));
-        } else {
-          allVideos = [];
         }
+
+        // Merge with local videos (so videos uploaded on this device are never lost!)
+        let localVideos = [];
+        try {
+          const stored = localStorage.getItem('rk_local_videos');
+          localVideos = stored ? JSON.parse(stored) : [];
+        } catch (e) {}
+
+        const videoMap = new Map();
+        fbVideos.forEach(v => videoMap.set(v.videoId, v));
+        localVideos.forEach(v => {
+          if (!videoMap.has(v.videoId)) {
+            videoMap.set(v.videoId, v);
+          } else {
+            videoMap.set(v.videoId, { ...videoMap.get(v.videoId), ...v });
+          }
+        });
+
+        allVideos = Array.from(videoMap.values());
+        allVideos.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         renderVideos();
       }, (err) => {
         console.error("Firebase videos fetch error:", err);
@@ -668,7 +711,70 @@
     showToast("🔴 লাইভ ৪কে সম্প্রচার শুরু হয়েছে!");
   }
 
-  // Open Video Player Modal (Supports both Standard & LIVE 4K Stream Mode)
+  // Screen Wake Lock API: Keeps device screen illuminated while watching video
+  async function requestScreenWakeLock() {
+    if (!isWakeLockEnabled || activeWakeLock) return;
+    if ('wakeLock' in navigator) {
+      try {
+        activeWakeLock = await navigator.wakeLock.request('screen');
+        activeWakeLock.addEventListener('release', () => {
+          activeWakeLock = null;
+        });
+        console.log("💡 Screen Wake Lock activated");
+      } catch (err) {
+        console.warn("Wake lock request notice:", err);
+      }
+    }
+  }
+
+  function releaseScreenWakeLock() {
+    if (activeWakeLock) {
+      activeWakeLock.release().catch(() => {});
+      activeWakeLock = null;
+      console.log("💡 Screen Wake Lock released");
+    }
+  }
+
+  // Media Session API: Enables Background Audio Playback & Lock-Screen / Notification Bar Controls
+  function updateMediaSession(video) {
+    if (!('mediaSession' in navigator) || !video) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: video.title || 'ভিডিও প্লেয়ার',
+        artist: (currentSettings && currentSettings.siteName) || 'RK VIDEO',
+        album: video.category || 'Viral Entertainment',
+        artwork: [
+          { src: video.thumbUrl || '/icons/icon-192.png', sizes: '192x192', type: 'image/jpeg' },
+          { src: video.thumbUrl || '/icons/icon-512.png', sizes: '512x512', type: 'image/jpeg' }
+        ]
+      });
+
+      const handlers = [
+        ['play', () => { mainVideoPlayer.play(); }],
+        ['pause', () => { mainVideoPlayer.pause(); }],
+        ['seekbackward', (details) => {
+          mainVideoPlayer.currentTime = Math.max(mainVideoPlayer.currentTime - (details.seekOffset || 10), 0);
+        }],
+        ['seekforward', (details) => {
+          mainVideoPlayer.currentTime = Math.min(mainVideoPlayer.currentTime + (details.seekOffset || 10), mainVideoPlayer.duration || 0);
+        }],
+        ['seekto', (details) => {
+          if (details.seekTime !== undefined) mainVideoPlayer.currentTime = details.seekTime;
+        }],
+        ['stop', () => { closeVideoPlayer(); }]
+      ];
+
+      handlers.forEach(([action, handler]) => {
+        try {
+          navigator.mediaSession.setActionHandler(action, handler);
+        } catch (e) {}
+      });
+    } catch (msErr) {
+      console.warn("MediaSession setup note:", msErr);
+    }
+  }
+
+  // Open Video Player Modal (Supports Standard, LIVE 4K, Background Play & Direct Range Stream)
   async function openVideoPlayer(video, isLiveMode = false) {
     if (!video || !playerBackdrop || !mainVideoPlayer) return;
     activeVideo = video;
@@ -678,27 +784,53 @@
       activeVideoBlobUrl = null;
     }
 
-    const rawUrl = video.videoUrl || '';
-    if (rawUrl.startsWith('indexeddb://')) {
-      const vidKey = rawUrl.replace('indexeddb://', '') || video.videoId;
-      if (window.RK_INDEXED_DB) {
-        const blob = await window.RK_INDEXED_DB.getVideoBlob(vidKey);
-        if (blob) {
-          activeVideoBlobUrl = URL.createObjectURL(blob);
-          mainVideoPlayer.src = activeVideoBlobUrl;
-        } else {
-          showToast("ভিডিও ফাইলটি পাওয়া যায়নি।");
-          return;
-        }
-      } else {
-        showToast("ভিডিও স্টোরেজ পাওয়া যায়নি।");
-        return;
+    // Reset UI overlay states
+    if (playerCenterPrompt) playerCenterPrompt.style.display = 'none';
+    if (playerErrorOverlay) playerErrorOverlay.style.display = 'none';
+
+    // Sync Background Controls
+    if (bgPlayToggle) {
+      bgPlayToggle.checked = isBackgroundPlayEnabled;
+    }
+    if (wakeLockBtn) {
+      wakeLockBtn.classList.toggle('active', isWakeLockEnabled);
+      if (wakeLockText) {
+        wakeLockText.textContent = isWakeLockEnabled ? 'স্ক্রিন অন সক্রিয়' : 'স্ক্রিন অন বন্ধ';
       }
-    } else {
+    }
+
+    const rawUrl = video.videoUrl || '';
+    let videoLoaded = false;
+
+    // STEP 1: Direct Network Range Streaming for Server & Remote URLs
+    // (Streams both small 1MB and big 100MB+ videos with zero RAM choke and instant seek)
+    if (rawUrl && !rawUrl.startsWith('indexeddb://')) {
       mainVideoPlayer.src = safeVideoUrl(rawUrl);
+      videoLoaded = true;
+    } else {
+      // STEP 2: Explicit IndexedDB video loading
+      const vidKey = (rawUrl.startsWith('indexeddb://') ? rawUrl.replace('indexeddb://', '') : '') || video.videoId;
+      if (window.RK_INDEXED_DB && vidKey) {
+        try {
+          const localBlob = await window.RK_INDEXED_DB.getVideoBlob(vidKey);
+          if (localBlob && localBlob.size > 0) {
+            activeVideoBlobUrl = URL.createObjectURL(localBlob);
+            mainVideoPlayer.src = activeVideoBlobUrl;
+            videoLoaded = true;
+          }
+        } catch (idbErr) {
+          console.warn("IndexedDB check note:", idbErr);
+        }
+      }
+    }
+
+    if (!videoLoaded) {
+      showToast("ভিডিও ফাইলটি পাওয়া যায়নি।");
+      return;
     }
 
     mainVideoPlayer.poster = video.thumbUrl || '';
+    mainVideoPlayer.load();
 
     // Handle LIVE 4K Mode vs Standard Mode
     if (isLiveMode) {
@@ -740,11 +872,25 @@
     playerBackdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    const playPromise = mainVideoPlayer.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(err => {
-        console.warn("Autoplay was prevented by browser policy or invalid URL:", err);
-      });
+    // Safe playback triggering on readyState or user click (prevents mobile crash on big videos)
+    const playAttempt = () => {
+      const playPromise = mainVideoPlayer.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          if (playerCenterPrompt) playerCenterPrompt.style.display = 'none';
+          requestScreenWakeLock();
+          updateMediaSession(video);
+        }).catch(err => {
+          console.warn("Autoplay was prevented or requires user click:", err);
+          if (playerCenterPrompt) playerCenterPrompt.style.display = 'flex';
+        });
+      }
+    };
+
+    if (mainVideoPlayer.readyState >= 2) {
+      playAttempt();
+    } else {
+      mainVideoPlayer.addEventListener('loadeddata', playAttempt, { once: true });
     }
 
     incrementViewCount(video.videoId);
@@ -758,6 +904,14 @@
       liveBroadcastInterval = null;
     }
     if (playerLiveIndicator) playerLiveIndicator.style.display = 'none';
+    if (playerCenterPrompt) playerCenterPrompt.style.display = 'none';
+    if (playerErrorOverlay) playerErrorOverlay.style.display = 'none';
+
+    releaseScreenWakeLock();
+
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
+    }
 
     mainVideoPlayer.pause();
     if (activeVideoBlobUrl) {
@@ -944,9 +1098,85 @@
     }
   }
 
-  // Video Error Handler
+  // Video & Background Player Event Setup
   function setupPlayerEvents() {
     if (playerCloseBtn) playerCloseBtn.addEventListener('click', closeVideoPlayer);
+
+    // Floating Picture-in-Picture (PiP)
+    if (playerPipBtn) {
+      playerPipBtn.addEventListener('click', async () => {
+        if (!mainVideoPlayer) return;
+        try {
+          if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+          } else if (mainVideoPlayer.requestPictureInPicture) {
+            await mainVideoPlayer.requestPictureInPicture();
+          } else {
+            showToast("আপনার ব্রাউজারে পিকচার-ইন-পিকচার সমর্থিত নয়।");
+          }
+        } catch (pipErr) {
+          console.warn("PiP error:", pipErr);
+          showToast("পিকচার-ইন-পিকচার চালু করা যায়নি।");
+        }
+      });
+    }
+
+    // Background Play Toggle
+    if (bgPlayToggle) {
+      bgPlayToggle.addEventListener('change', () => {
+        isBackgroundPlayEnabled = bgPlayToggle.checked;
+        try {
+          localStorage.setItem('rk_bg_play', isBackgroundPlayEnabled ? 'true' : 'false');
+        } catch (e) {}
+        showToast(isBackgroundPlayEnabled 
+          ? "🎵 ব্যাকগ্রাউন্ড প্লে সক্রিয়: স্ক্রিন বন্ধেও অডিও চলবে!" 
+          : "ব্যাকগ্রাউন্ড প্লে বন্ধ করা হয়েছে।");
+      });
+    }
+
+    // Screen Wake Lock Toggle
+    if (wakeLockBtn) {
+      wakeLockBtn.addEventListener('click', () => {
+        isWakeLockEnabled = !isWakeLockEnabled;
+        try {
+          localStorage.setItem('rk_screen_wake', isWakeLockEnabled ? 'true' : 'false');
+        } catch (e) {}
+        wakeLockBtn.classList.toggle('active', isWakeLockEnabled);
+        if (wakeLockText) {
+          wakeLockText.textContent = isWakeLockEnabled ? 'স্ক্রিন অন সক্রিয়' : 'স্ক্রিন অন বন্ধ';
+        }
+        if (isWakeLockEnabled) {
+          requestScreenWakeLock();
+          showToast("💡 ভিডিও চলার সময় স্ক্রিনের আলো বন্ধ হবে না।");
+        } else {
+          releaseScreenWakeLock();
+          showToast("স্ক্রিন অন সুবিধা বন্ধ করা হয়েছে।");
+        }
+      });
+    }
+
+    // Center Tap-to-Play Button (Overcomes browser autoplay restrictions)
+    if (playerCenterPlayBtn) {
+      playerCenterPlayBtn.addEventListener('click', () => {
+        if (mainVideoPlayer) {
+          mainVideoPlayer.play().then(() => {
+            if (playerCenterPrompt) playerCenterPrompt.style.display = 'none';
+          }).catch(err => {
+            console.warn("Manual play error:", err);
+          });
+        }
+      });
+    }
+
+    // Player Retry Button
+    if (playerRetryBtn) {
+      playerRetryBtn.addEventListener('click', () => {
+        if (playerErrorOverlay) playerErrorOverlay.style.display = 'none';
+        if (activeVideo) {
+          openVideoPlayer(activeVideo);
+        }
+      });
+    }
 
     if (playerBackdrop) {
       playerBackdrop.addEventListener('click', (e) => {
@@ -992,12 +1222,154 @@
       });
     }
 
+    // Page Visibility Change (Maintains persistent background playback!)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // App is minimized, screen locked, or switched to another tab/app
+        if (mainVideoPlayer && !mainVideoPlayer.paused) {
+          if (isBackgroundPlayEnabled) {
+            console.log("🎵 Background playback active - video keeping stream open");
+            // DO NOT PAUSE! Let MediaSession and audio continue seamlessly!
+          }
+        }
+      } else {
+        // App returned to foreground
+        if (mainVideoPlayer && !mainVideoPlayer.paused && isWakeLockEnabled) {
+          requestScreenWakeLock();
+        }
+      }
+    });
+
     if (mainVideoPlayer) {
-      mainVideoPlayer.addEventListener('error', (e) => {
-        console.error("Video player error:", e);
-        showToast("ভিডিওটি বর্তমানে পাওয়া যাচ্ছে না।");
+      mainVideoPlayer.addEventListener('play', () => {
+        if (playerCenterPrompt) playerCenterPrompt.style.display = 'none';
+        if (playerErrorOverlay) playerErrorOverlay.style.display = 'none';
+        requestScreenWakeLock();
+        if (activeVideo) updateMediaSession(activeVideo);
+      });
+
+      mainVideoPlayer.addEventListener('pause', () => {
+        releaseScreenWakeLock();
+      });
+
+      mainVideoPlayer.addEventListener('ended', () => {
+        releaseScreenWakeLock();
+      });
+
+      mainVideoPlayer.addEventListener('error', async (e) => {
+        const mediaErr = mainVideoPlayer.error;
+        const errCode = mediaErr ? mediaErr.code : 0;
+        console.warn("Video player error detected, code:", errCode, mediaErr ? mediaErr.message : '');
+
+        // If player error was caused by uninitialized/empty source, ignore
+        if (!mainVideoPlayer.src || mainVideoPlayer.src === window.location.href) {
+          return;
+        }
+
+        // Automatic Recovery: If a server/network link (/uploads/... or remote URL) failed, 
+        // check if we have the local original Blob in IndexedDB and seamlessly switch to it!
+        if (activeVideo && window.RK_INDEXED_DB && (!activeVideoBlobUrl || !mainVideoPlayer.src.startsWith('blob:'))) {
+          try {
+            const vidKey = activeVideo.videoId;
+            const fallbackBlob = await window.RK_INDEXED_DB.getVideoBlob(vidKey);
+            if (fallbackBlob && fallbackBlob.size > 0) {
+              console.log("✅ Recovering video playback using local IndexedDB high-speed blob!");
+              if (activeVideoBlobUrl) URL.revokeObjectURL(activeVideoBlobUrl);
+              activeVideoBlobUrl = URL.createObjectURL(fallbackBlob);
+              mainVideoPlayer.src = activeVideoBlobUrl;
+              mainVideoPlayer.load();
+              mainVideoPlayer.play().catch(() => {});
+              return;
+            }
+          } catch (recoveryErr) {
+            console.warn("Recovery attempt note:", recoveryErr);
+          }
+        }
+
+        // Display user-friendly error overlay with retry option
+        if (playerErrorOverlay) {
+          if (playerErrorText) {
+            playerErrorText.textContent = "ভিডিওটি বর্তমানে লোড করা সম্ভব হয়নি। ফাইলটি অনুপস্থিত বা প্রসেস হচ্ছে।";
+          }
+          playerErrorOverlay.style.display = 'flex';
+        }
+        showToast("ভিডিও লোড হতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
       });
     }
+  }
+
+  // PWA Service Worker Registration & Persistent Background Running System
+  function initPwaAndBackgroundService() {
+    // 1. Register Service Worker for offline support, instant caching & background keep-alive
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          console.log("✅ Background Service Worker active, scope:", reg.scope);
+        }).catch((err) => {
+          console.warn("Service Worker registration note:", err);
+        });
+      });
+    }
+
+    // 2. Periodic heartbeat ping to Service Worker (keeps background processes alive)
+    setInterval(() => {
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'PING_BACKGROUND' });
+        }
+      } catch (e) {}
+    }, 25000);
+
+    // 3. Capture beforeinstallprompt event for 1-click native PWA installation
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (pwaInstallNavBtn) pwaInstallNavBtn.style.display = 'inline-flex';
+      if (menuInstallBtn) menuInstallBtn.style.display = 'flex';
+
+      const dismissed = sessionStorage.getItem('rk_pwa_dismissed');
+      if (!dismissed && pwaInstallPromptBar) {
+        setTimeout(() => {
+          if (deferredInstallPrompt) pwaInstallPromptBar.style.display = 'flex';
+        }, 3000);
+      }
+    });
+
+    const triggerPwaInstall = async () => {
+      if (!deferredInstallPrompt) {
+        showToast("আপনার ব্রাউজারের থ্রি-ডট (⋮) মেনু থেকে 'Install app' বা 'Add to Home screen' চাপুন।", 4500);
+        return;
+      }
+      try {
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          showToast("RK VIDEO ইনস্টল হচ্ছে...");
+        }
+        deferredInstallPrompt = null;
+        if (pwaInstallPromptBar) pwaInstallPromptBar.style.display = 'none';
+      } catch (e) {
+        console.warn("Install prompt note:", e);
+      }
+    };
+
+    if (pwaInstallNavBtn) pwaInstallNavBtn.addEventListener('click', triggerPwaInstall);
+    if (menuInstallBtn) menuInstallBtn.addEventListener('click', triggerPwaInstall);
+    if (pwaInstallConfirmBtn) pwaInstallConfirmBtn.addEventListener('click', triggerPwaInstall);
+
+    if (pwaInstallDismissBtn && pwaInstallPromptBar) {
+      pwaInstallDismissBtn.addEventListener('click', () => {
+        pwaInstallPromptBar.style.display = 'none';
+        sessionStorage.setItem('rk_pwa_dismissed', 'true');
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      if (pwaInstallNavBtn) pwaInstallNavBtn.style.display = 'none';
+      if (pwaInstallPromptBar) pwaInstallPromptBar.style.display = 'none';
+      showToast("🎉 RK VIDEO অ্যাপ ইনস্টল সফল হয়েছে! ব্যাকগ্রাউন্ড প্লে চালু আছে।", 4000);
+    });
   }
 
   function checkUrlHash() {
@@ -1146,6 +1518,7 @@
     setupPlayerEvents();
     initData();
     checkUrlHash();
+    initPwaAndBackgroundService();
   });
 
 })();
